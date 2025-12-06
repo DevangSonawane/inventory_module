@@ -63,6 +63,43 @@ import {
   getStockLevelByMaterial,
   getStockSummary
 } from '../controllers/stockLevelController.js';
+import {
+  getTransactionHistory,
+  getStockMovement,
+  getConsumptionAnalysis,
+  getStockValuation
+} from '../controllers/reportController.js';
+import {
+  downloadDocument,
+  deleteDocument,
+  addDocumentsToInward
+} from '../controllers/fileController.js';
+import {
+  getAuditLogs,
+  getEntityHistory
+} from '../controllers/auditController.js';
+import {
+  getNotifications,
+  markNotificationRead,
+  deleteNotification
+} from '../controllers/notificationController.js';
+import {
+  globalSearch
+} from '../controllers/searchController.js';
+import {
+  bulkMaterials,
+  bulkInward
+} from '../controllers/bulkController.js';
+import {
+  exportMaterials,
+  exportInward,
+  exportStockLevels
+} from '../controllers/exportController.js';
+import {
+  validateProductCode,
+  validateSlipNumber
+} from '../controllers/validationController.js';
+import { uploadInwardDocuments } from '../middleware/upload.js';
 
 const router = express.Router();
 
