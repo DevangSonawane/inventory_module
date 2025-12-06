@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 **/node_modules/
+inventory_module/node_modules/
+Ethernet-CRM-pr-executive-management/server/node_modules/
+Ethernet-CRM-pr-executive-management/client/node_modules/
 
 # Environment variables
 .env
