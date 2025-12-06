@@ -83,17 +83,34 @@ export const globalSearch = async (req, res, next) => {
 
     // Search material requests
     if (!type || type === 'materialRequest') {
+      // MaterialRequest has pr_numbers as JSON, so we need to search differently
+      // We'll search by status and request_id, and filter by pr_numbers in application layer
       const materialRequests = await MaterialRequest.findAll({
         where: {
           is_active: true,
           [Op.or]: [
-            { slip_number: { [Op.like]: `%${searchTerm}%` } },
+            { status: { [Op.like]: `%${searchTerm}%` } },
+            { request_id: { [Op.like]: `%${searchTerm}%` } },
           ],
         },
-        limit: parseInt(limit),
-        attributes: ['request_id', 'slip_number', 'request_date', 'status'],
+        limit: parseInt(limit) * 2, // Get more to filter by pr_numbers
+        attributes: ['request_id', 'pr_numbers', 'status', 'createdAt'],
       });
-      results.materialRequests = materialRequests;
+      
+      // Filter by pr_numbers in application layer since it's JSON
+      const filteredRequests = materialRequests.filter(req => {
+        const prNumbers = req.pr_numbers || [];
+        return prNumbers.some(pr => 
+          pr.prNumber && pr.prNumber.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      }).slice(0, parseInt(limit));
+      
+      results.materialRequests = filteredRequests.map(req => ({
+        request_id: req.request_id,
+        pr_numbers: req.pr_numbers,
+        status: req.status,
+        request_date: req.createdAt,
+      }));
     }
 
     // Search stock transfers
@@ -155,4 +172,5 @@ export const globalSearch = async (req, res, next) => {
     next(error);
   }
 };
+
 

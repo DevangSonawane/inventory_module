@@ -108,3 +108,4 @@ const InwardEntry = sequelize.define('inward_entry', {
 
 export default InwardEntry;
 
+

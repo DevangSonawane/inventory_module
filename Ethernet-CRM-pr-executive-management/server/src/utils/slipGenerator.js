@@ -22,3 +22,4 @@ export const generateMR = () => {
   return generateSlipNumber('MR');
 };
 
+

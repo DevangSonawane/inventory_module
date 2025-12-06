@@ -55,3 +55,4 @@ const StockArea = sequelize.define('stock_area', {
 
 export default StockArea;
 
+
