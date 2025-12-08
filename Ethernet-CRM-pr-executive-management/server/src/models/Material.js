@@ -72,3 +72,5 @@ const Material = sequelize.define('material', {
 export default Material;
 
 
+
+

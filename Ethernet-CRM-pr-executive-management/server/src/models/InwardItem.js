@@ -63,3 +63,5 @@ const InwardItem = sequelize.define('inward_item', {
 export default InwardItem;
 
 
+
+

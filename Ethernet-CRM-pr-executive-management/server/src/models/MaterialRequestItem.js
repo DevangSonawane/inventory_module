@@ -56,3 +56,5 @@ const MaterialRequestItem = sequelize.define('material_request_item', {
 export default MaterialRequestItem;
 
 
+
+

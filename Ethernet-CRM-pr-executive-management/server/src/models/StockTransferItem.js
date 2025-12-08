@@ -50,3 +50,5 @@ const StockTransferItem = sequelize.define('stock_transfer_item', {
 export default StockTransferItem;
 
 
+
+

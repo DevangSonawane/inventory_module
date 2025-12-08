@@ -53,3 +53,5 @@ const ConsumptionItem = sequelize.define('consumption_item', {
 export default ConsumptionItem;
 
 
+
+

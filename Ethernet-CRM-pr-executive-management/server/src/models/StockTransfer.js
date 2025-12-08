@@ -94,3 +94,5 @@ const StockTransfer = sequelize.define('stock_transfer', {
 export default StockTransfer;
 
 
+
+
