@@ -514,3 +514,8 @@ export const deleteInward = async (req, res) => {
 
 
 
+
+
+
+
+

@@ -51,20 +51,6 @@ const startServer = async () => {
   try {
     await connectDB();
     
-    // Import all models after database connection to ensure they're registered
-    // This must be done after connectDB() to avoid circular dependency
-    await import('./models/index.js');
-    
-    // Run database migrations automatically (silent mode)
-    try {
-      const runMigration = (await import('./scripts/migrateInventoryTables.js')).default;
-      await runMigration(true); // Run silently
-      console.log('✅ Database migrations checked and applied (if needed)');
-    } catch (migrationError) {
-      // Don't fail server startup if migration has issues, just log it
-      console.warn('⚠️  Database migration check failed (non-critical):', migrationError.message);
-    }
-    
     app.listen(PORT, HOST, () => {
       console.log(`🚀 Server is running on http://${HOST}:${PORT}`);
       console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
