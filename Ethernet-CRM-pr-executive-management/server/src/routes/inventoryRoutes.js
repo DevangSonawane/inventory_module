@@ -45,6 +45,12 @@ import {
   deleteMaterialRequest
 } from '../controllers/materialRequestController.js';
 import {
+  getAvailableStockForAllocation,
+  allocateItems,
+  getAllocations,
+  cancelAllocation
+} from '../controllers/materialAllocationController.js';
+import {
   createStockTransfer,
   getAllStockTransfers,
   getStockTransferById,
@@ -58,6 +64,19 @@ import {
   updateConsumption,
   deleteConsumption
 } from '../controllers/consumptionController.js';
+import {
+  getPersonStock,
+  getPersonStockByTicket,
+  searchPersonStockBySerial
+} from '../controllers/personStockController.js';
+import {
+  createReturn,
+  getAllReturns,
+  getReturnById,
+  approveReturn,
+  rejectReturn,
+  getAvailableItemsForReturn
+} from '../controllers/returnController.js';
 import {
   getStockLevels,
   getStockLevelByMaterial,
@@ -691,6 +710,83 @@ router.post(
 );
 
 /**
+ * @route   GET /api/inventory/material-request/:id/available-stock
+ * @desc    Get available stock for allocation
+ * @access  Private
+ * @query   stockAreaId, materialId
+ */
+router.get(
+  '/material-request/:id/available-stock',
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid material request ID')
+  ],
+  validate,
+  getAvailableStockForAllocation
+);
+
+/**
+ * @route   GET /api/inventory/material-request/:id/allocations
+ * @desc    Get allocations for a material request
+ * @access  Private
+ */
+router.get(
+  '/material-request/:id/allocations',
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid material request ID')
+  ],
+  validate,
+  getAllocations
+);
+
+/**
+ * @route   POST /api/inventory/material-request/:id/allocate
+ * @desc    Allocate items to material request
+ * @access  Private
+ */
+router.post(
+  '/material-request/:id/allocate',
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid material request ID'),
+    body('allocations')
+      .isArray({ min: 1 })
+      .withMessage('At least one allocation is required'),
+    body('allocations.*.materialRequestItemId')
+      .isUUID()
+      .withMessage('Valid material request item ID is required'),
+    body('allocations.*.inventoryMasterIds')
+      .isArray({ min: 1 })
+      .withMessage('At least one inventory item ID is required'),
+  ],
+  validate,
+  allocateItems
+);
+
+/**
+ * @route   DELETE /api/inventory/material-request/:id/allocations/:allocationId
+ * @desc    Cancel allocation
+ * @access  Private
+ */
+router.delete(
+  '/material-request/:id/allocations/:allocationId',
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid material request ID'),
+    param('allocationId')
+      .isUUID()
+      .withMessage('Invalid allocation ID')
+  ],
+  validate,
+  cancelAllocation
+);
+
+/**
  * @route   DELETE /api/inventory/material-request/:id
  * @desc    Delete material request (soft delete)
  * @access  Private
@@ -896,6 +992,141 @@ router.delete(
   ],
   validate,
   deleteConsumption
+);
+
+// ==================== PERSON STOCK ROUTES ====================
+
+/**
+ * @route   GET /api/inventory/person-stock
+ * @desc    Get person stock (technician's assigned inventory)
+ * @access  Private
+ * @query   userId, ticketId, materialId, status, page, limit, orgId
+ */
+router.get('/person-stock', getPersonStock);
+
+/**
+ * @route   GET /api/inventory/person-stock/ticket/:ticketId
+ * @desc    Get person stock by ticket
+ * @access  Private
+ * @query   userId, status, orgId
+ */
+router.get(
+  '/person-stock/ticket/:ticketId',
+  [
+    param('ticketId')
+      .notEmpty()
+      .trim()
+      .withMessage('Ticket ID is required')
+  ],
+  validate,
+  getPersonStockByTicket
+);
+
+/**
+ * @route   GET /api/inventory/person-stock/search
+ * @desc    Search person stock by serial number
+ * @access  Private
+ * @query   serialNumber, userId, ticketId
+ */
+router.get('/person-stock/search', searchPersonStockBySerial);
+
+// ==================== RETURN ROUTES ====================
+
+/**
+ * @route   GET /api/inventory/returns/available-items
+ * @desc    Get technician's items available for return
+ * @access  Private
+ * @query   technicianId, ticketId, materialId
+ */
+router.get('/returns/available-items', getAvailableItemsForReturn);
+
+/**
+ * @route   POST /api/inventory/returns
+ * @desc    Create new return record
+ * @access  Private
+ */
+router.post(
+  '/returns',
+  [
+    body('technicianId')
+      .optional()
+      .isInt()
+      .withMessage('Invalid technician ID'),
+    body('returnDate')
+      .optional()
+      .isISO8601()
+      .withMessage('Invalid return date'),
+    body('reason')
+      .isIn(['UNUSED', 'FAULTY', 'CANCELLED'])
+      .withMessage('Reason must be UNUSED, FAULTY, or CANCELLED'),
+    body('items')
+      .isArray({ min: 1 })
+      .withMessage('At least one item is required'),
+    body('items.*.materialId')
+      .isUUID()
+      .withMessage('Valid material ID is required for each item'),
+  ],
+  validate,
+  createReturn
+);
+
+/**
+ * @route   GET /api/inventory/returns
+ * @desc    Get all return records with filtering and pagination
+ * @access  Private
+ */
+router.get('/returns', getAllReturns);
+
+/**
+ * @route   GET /api/inventory/returns/:id
+ * @desc    Get single return record by ID
+ * @access  Private
+ */
+router.get(
+  '/returns/:id',
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid return ID')
+  ],
+  validate,
+  getReturnById
+);
+
+/**
+ * @route   PUT /api/inventory/returns/:id/approve
+ * @desc    Approve return and transfer items to warehouse
+ * @access  Private
+ */
+router.put(
+  '/returns/:id/approve',
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid return ID'),
+    body('stockAreaId')
+      .optional()
+      .isUUID()
+      .withMessage('Invalid stock area ID'),
+  ],
+  validate,
+  approveReturn
+);
+
+/**
+ * @route   PUT /api/inventory/returns/:id/reject
+ * @desc    Reject return record
+ * @access  Private
+ */
+router.put(
+  '/returns/:id/reject',
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid return ID'),
+  ],
+  validate,
+  rejectReturn
 );
 
 // ==================== STOCK LEVEL ROUTES ====================

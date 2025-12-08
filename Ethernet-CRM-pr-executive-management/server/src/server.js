@@ -53,6 +53,16 @@ const startServer = async () => {
   try {
     await connectDB();
     
+    // Run database migrations automatically (silent mode)
+    try {
+      const runMigration = (await import('./scripts/migrateInventoryTables.js')).default;
+      await runMigration(true); // Run silently
+      console.log('✅ Database migrations checked and applied (if needed)');
+    } catch (migrationError) {
+      console.warn('⚠️  Database migration check failed (non-critical):', migrationError.message);
+      // Don't exit - allow server to start even if migration fails
+    }
+    
     app.listen(PORT, HOST, () => {
       console.log(`🚀 Server is running on http://${HOST}:${PORT}`);
       console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);

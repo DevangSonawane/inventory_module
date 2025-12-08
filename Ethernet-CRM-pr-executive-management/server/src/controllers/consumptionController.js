@@ -2,6 +2,7 @@ import ConsumptionRecord from '../models/ConsumptionRecord.js';
 import ConsumptionItem from '../models/ConsumptionItem.js';
 import Material from '../models/Material.js';
 import StockArea from '../models/StockArea.js';
+import InventoryMaster from '../models/InventoryMaster.js';
 import { validationResult } from 'express-validator';
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
@@ -22,9 +23,11 @@ export const createConsumption = async (req, res) => {
 
     const {
       externalSystemRefId,
+      ticketId, // New: Link to ticket
       customerData, // JSON object with customer details
       consumptionDate,
       stockAreaId,
+      fromUserId, // New: If consuming from person stock
       items, // Array of {materialId, quantity, serialNumber, remarks}
       remarks,
       orgId
@@ -59,6 +62,7 @@ export const createConsumption = async (req, res) => {
     // Create consumption record
     const consumptionRecord = await ConsumptionRecord.create({
       external_system_ref_id: externalSystemRefId,
+      ticket_id: ticketId || null,
       customer_data: customerData || null,
       consumption_date: consumptionDate || new Date().toISOString().split('T')[0],
       stock_area_id: stockAreaId || null,
@@ -68,7 +72,7 @@ export const createConsumption = async (req, res) => {
       is_active: true
     }, { transaction });
 
-    // Create consumption items
+    // Create consumption items and update inventory_master
     const createdItems = [];
     for (const item of items) {
       const { materialId, quantity, serialNumber, remarks: itemRemarks } = item;
@@ -86,15 +90,105 @@ export const createConsumption = async (req, res) => {
         });
       }
 
+      const itemQuantity = parseInt(quantity) || 1;
       const consumptionItem = await ConsumptionItem.create({
         consumption_id: consumptionRecord.consumption_id,
         material_id: materialId,
-        quantity: parseInt(quantity) || 1,
+        quantity: itemQuantity,
         serial_number: serialNumber || null,
         remarks: itemRemarks || null
       }, { transaction });
 
       createdItems.push(consumptionItem);
+
+      // Update inventory_master records
+      if (serialNumber) {
+        // Serialized item: Find and mark as consumed
+        const whereClause = {
+          serial_number: serialNumber,
+          material_id: materialId,
+          status: { [Op.ne]: 'CONSUMED' } // Not already consumed
+        };
+
+        // If consuming from person stock, validate it's in their stock
+        if (fromUserId) {
+          whereClause.current_location_type = 'PERSON';
+          whereClause.location_id = fromUserId.toString();
+          whereClause.ticket_id = ticketId || { [Op.ne]: null }; // Should be linked to ticket
+        } else if (stockAreaId) {
+          // Consuming from warehouse
+          whereClause.current_location_type = 'WAREHOUSE';
+          whereClause.location_id = stockAreaId;
+        }
+
+        const inventoryItem = await InventoryMaster.findOne({
+          where: {
+            ...whereClause,
+            is_active: true
+          },
+          transaction
+        });
+
+        if (!inventoryItem) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: `Serial number ${serialNumber} not found in ${fromUserId ? 'person stock' : 'warehouse'} or already consumed`
+          });
+        }
+
+        // Mark as consumed
+        await inventoryItem.update({
+          current_location_type: 'CONSUMED',
+          location_id: null,
+          status: 'CONSUMED',
+          ticket_id: ticketId || inventoryItem.ticket_id // Keep ticket_id if already set
+        }, { transaction });
+      } else {
+        // Bulk item: Find and mark quantity number of items as consumed
+        const whereClause = {
+          material_id: materialId,
+          serial_number: null, // Bulk items don't have serial numbers
+          status: { [Op.ne]: 'CONSUMED' }
+        };
+
+        // If consuming from person stock, validate it's in their stock
+        if (fromUserId) {
+          whereClause.current_location_type = 'PERSON';
+          whereClause.location_id = fromUserId.toString();
+        } else if (stockAreaId) {
+          // Consuming from warehouse
+          whereClause.current_location_type = 'WAREHOUSE';
+          whereClause.location_id = stockAreaId;
+        }
+
+        const availableItems = await InventoryMaster.findAll({
+          where: {
+            ...whereClause,
+            is_active: true
+          },
+          limit: itemQuantity,
+          transaction
+        });
+
+        if (availableItems.length < itemQuantity) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: `Insufficient stock. Available: ${availableItems.length}, Requested: ${itemQuantity}`
+          });
+        }
+
+        // Mark each item as consumed
+        for (const inventoryItem of availableItems) {
+          await inventoryItem.update({
+            current_location_type: 'CONSUMED',
+            location_id: null,
+            status: 'CONSUMED',
+            ticket_id: ticketId || inventoryItem.ticket_id
+          }, { transaction });
+        }
+      }
     }
 
     await transaction.commit();
@@ -454,6 +548,7 @@ export const deleteConsumption = async (req, res) => {
     });
   }
 };
+
 
 
 

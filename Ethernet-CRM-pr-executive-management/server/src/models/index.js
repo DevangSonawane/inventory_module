@@ -13,6 +13,10 @@ import StockTransfer from './StockTransfer.js';
 import StockTransferItem from './StockTransferItem.js';
 import ConsumptionRecord from './ConsumptionRecord.js';
 import ConsumptionItem from './ConsumptionItem.js';
+import InventoryMaster from './InventoryMaster.js';
+import MaterialAllocation from './MaterialAllocation.js';
+import ReturnRecord from './ReturnRecord.js';
+import ReturnItem from './ReturnItem.js';
 
 // ==================== INVENTORY MODEL ASSOCIATIONS ====================
 
@@ -41,9 +45,15 @@ StockTransferItem.belongsTo(Material, { foreignKey: 'material_id', as: 'material
 Material.hasMany(ConsumptionItem, { foreignKey: 'material_id', as: 'consumptionItems' });
 ConsumptionItem.belongsTo(Material, { foreignKey: 'material_id', as: 'material' });
 
+Material.hasMany(InventoryMaster, { foreignKey: 'material_id', as: 'inventoryItems' });
+InventoryMaster.belongsTo(Material, { foreignKey: 'material_id', as: 'material' });
+
 // InwardEntry associations
 InwardEntry.hasMany(InwardItem, { foreignKey: 'inward_id', as: 'items' });
 InwardItem.belongsTo(InwardEntry, { foreignKey: 'inward_id', as: 'inwardEntry' });
+
+InwardItem.hasMany(InventoryMaster, { foreignKey: 'inward_item_id', as: 'inventoryRecords' });
+InventoryMaster.belongsTo(InwardItem, { foreignKey: 'inward_item_id', as: 'inwardItem' });
 
 // MaterialRequest associations
 MaterialRequest.hasMany(MaterialRequestItem, { foreignKey: 'request_id', as: 'items' });
@@ -51,6 +61,15 @@ MaterialRequestItem.belongsTo(MaterialRequest, { foreignKey: 'request_id', as: '
 
 MaterialRequest.hasMany(StockTransfer, { foreignKey: 'material_request_id', as: 'stockTransfers' });
 StockTransfer.belongsTo(MaterialRequest, { foreignKey: 'material_request_id', as: 'materialRequest' });
+
+MaterialRequest.hasMany(MaterialAllocation, { foreignKey: 'material_request_id', as: 'allocations' });
+MaterialAllocation.belongsTo(MaterialRequest, { foreignKey: 'material_request_id', as: 'materialRequest' });
+
+MaterialRequestItem.hasMany(MaterialAllocation, { foreignKey: 'material_request_item_id', as: 'allocations' });
+MaterialAllocation.belongsTo(MaterialRequestItem, { foreignKey: 'material_request_item_id', as: 'materialRequestItem' });
+
+InventoryMaster.hasMany(MaterialAllocation, { foreignKey: 'inventory_master_id', as: 'allocations' });
+MaterialAllocation.belongsTo(InventoryMaster, { foreignKey: 'inventory_master_id', as: 'inventoryItem' });
 
 // StockTransfer associations
 StockTransfer.hasMany(StockTransferItem, { foreignKey: 'transfer_id', as: 'items' });
@@ -76,6 +95,39 @@ StockTransfer.belongsTo(User, { foreignKey: 'updated_by', as: 'updater' });
 User.hasMany(ConsumptionRecord, { foreignKey: 'created_by', as: 'consumptionRecords' });
 ConsumptionRecord.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
 
+User.hasMany(MaterialAllocation, { foreignKey: 'allocated_by', as: 'allocations' });
+MaterialAllocation.belongsTo(User, { foreignKey: 'allocated_by', as: 'allocator' });
+
+// ReturnRecord associations
+ReturnRecord.hasMany(ReturnItem, { foreignKey: 'return_id', as: 'items' });
+ReturnItem.belongsTo(ReturnRecord, { foreignKey: 'return_id', as: 'returnRecord' });
+
+ReturnRecord.belongsTo(ConsumptionRecord, { foreignKey: 'consumption_id', as: 'consumptionRecord' });
+ConsumptionRecord.hasMany(ReturnRecord, { foreignKey: 'consumption_id', as: 'returns' });
+
+ReturnRecord.belongsTo(User, { foreignKey: 'technician_id', as: 'technician' });
+ReturnRecord.belongsTo(User, { foreignKey: 'approved_by', as: 'approver' });
+ReturnRecord.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+ReturnRecord.belongsTo(User, { foreignKey: 'updated_by', as: 'updater' });
+
+ReturnItem.belongsTo(Material, { foreignKey: 'material_id', as: 'material' });
+Material.hasMany(ReturnItem, { foreignKey: 'material_id', as: 'returnItems' });
+
+ReturnItem.belongsTo(InventoryMaster, { foreignKey: 'inventory_master_id', as: 'inventoryItem' });
+InventoryMaster.hasMany(ReturnItem, { foreignKey: 'inventory_master_id', as: 'returns' });
+
+// InventoryMaster associations - location can be StockArea or User
+InventoryMaster.belongsTo(StockArea, { 
+  foreignKey: 'location_id', 
+  as: 'stockAreaLocation',
+  constraints: false // Allow null when location_type is not WAREHOUSE
+});
+InventoryMaster.belongsTo(User, { 
+  foreignKey: 'location_id', 
+  as: 'personLocation',
+  constraints: false // Allow null when location_type is not PERSON
+});
+
 // Export all models
 const models = {
   User,
@@ -92,6 +144,10 @@ const models = {
   StockTransferItem,
   ConsumptionRecord,
   ConsumptionItem,
+  InventoryMaster,
+  MaterialAllocation,
+  ReturnRecord,
+  ReturnItem,
 };
 
 export default models;

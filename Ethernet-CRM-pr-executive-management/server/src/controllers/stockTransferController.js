@@ -3,6 +3,8 @@ import StockTransferItem from '../models/StockTransferItem.js';
 import Material from '../models/Material.js';
 import StockArea from '../models/StockArea.js';
 import MaterialRequest from '../models/MaterialRequest.js';
+import InventoryMaster from '../models/InventoryMaster.js';
+import User from '../models/User.js';
 import { validationResult } from 'express-validator';
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
@@ -25,6 +27,8 @@ export const createStockTransfer = async (req, res) => {
     const {
       fromStockAreaId,
       toStockAreaId,
+      toUserId, // New: Transfer to person instead of stock area
+      ticketId, // New: Link to ticket
       materialRequestId,
       transferDate,
       items, // Array of {materialId, quantity, serialNumbers, remarks}
@@ -34,28 +38,68 @@ export const createStockTransfer = async (req, res) => {
 
     const userId = req.user?.id || req.user?.user_id;
 
-    // Validate stock areas
+    // Validate source stock area
     const fromStockArea = await StockArea.findOne({
       where: { area_id: fromStockAreaId, is_active: true }
     });
 
-    const toStockArea = await StockArea.findOne({
-      where: { area_id: toStockAreaId, is_active: true }
-    });
-
-    if (!fromStockArea || !toStockArea) {
+    if (!fromStockArea) {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: 'Invalid stock area'
+        message: 'Invalid source stock area'
       });
     }
 
-    if (fromStockAreaId === toStockAreaId) {
+    // Validate destination: either toStockAreaId OR toUserId (not both, at least one)
+    let toStockArea = null;
+    let toUser = null;
+    let destinationType = null;
+    let destinationId = null;
+
+    if (toUserId) {
+      // Transferring to a person (technician)
+      toUser = await User.findOne({
+        where: { id: toUserId, is_active: true }
+      });
+
+      if (!toUser) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid destination user'
+        });
+      }
+      destinationType = 'PERSON';
+      destinationId = toUserId.toString();
+    } else if (toStockAreaId) {
+      // Transferring to another stock area
+      toStockArea = await StockArea.findOne({
+        where: { area_id: toStockAreaId, is_active: true }
+      });
+
+      if (!toStockArea) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid destination stock area'
+        });
+      }
+
+      if (fromStockAreaId === toStockAreaId) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'Source and destination stock areas cannot be the same'
+        });
+      }
+      destinationType = 'WAREHOUSE';
+      destinationId = toStockAreaId;
+    } else {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
-        message: 'Source and destination stock areas cannot be the same'
+        message: 'Either destination stock area or destination user must be provided'
       });
     }
 
@@ -103,7 +147,9 @@ export const createStockTransfer = async (req, res) => {
     // Create stock transfer
     const stockTransfer = await StockTransfer.create({
       from_stock_area_id: fromStockAreaId,
-      to_stock_area_id: toStockAreaId,
+      to_stock_area_id: toStockAreaId || null, // Can be null if transferring to person
+      to_user_id: toUserId || null, // Can be null if transferring to stock area
+      ticket_id: ticketId || null,
       material_request_id: materialRequestId || null,
       transfer_date: transferDate || new Date().toISOString().split('T')[0],
       transfer_number: transferNumber,
@@ -115,7 +161,7 @@ export const createStockTransfer = async (req, res) => {
       is_active: true
     }, { transaction });
 
-    // Create transfer items
+    // Create transfer items and update inventory_master
     const createdItems = [];
     for (const item of items) {
       const { materialId, quantity, serialNumbers, remarks: itemRemarks } = item;
@@ -133,15 +179,82 @@ export const createStockTransfer = async (req, res) => {
         });
       }
 
+      const itemQuantity = parseInt(quantity) || 1;
       const transferItem = await StockTransferItem.create({
         transfer_id: stockTransfer.transfer_id,
         material_id: materialId,
-        quantity: parseInt(quantity) || 1,
+        quantity: itemQuantity,
         serial_numbers: serialNumbers || null,
         remarks: itemRemarks || null
       }, { transaction });
 
       createdItems.push(transferItem);
+
+      // Update inventory_master records
+      if (serialNumbers && Array.isArray(serialNumbers) && serialNumbers.length > 0) {
+        // Serialized items: Update specific serial numbers
+        for (const serialNumber of serialNumbers) {
+          const inventoryItem = await InventoryMaster.findOne({
+            where: {
+              serial_number: serialNumber,
+              material_id: materialId,
+              current_location_type: 'WAREHOUSE',
+              location_id: fromStockAreaId,
+              status: 'AVAILABLE',
+              is_active: true
+            },
+            transaction
+          });
+
+          if (!inventoryItem) {
+            await transaction.rollback();
+            return res.status(400).json({
+              success: false,
+              message: `Serial number ${serialNumber} not found in source warehouse or not available`
+            });
+          }
+
+          // Update inventory_master location
+          await inventoryItem.update({
+            current_location_type: destinationType,
+            location_id: destinationId,
+            ticket_id: ticketId || null,
+            status: destinationType === 'PERSON' ? 'IN_TRANSIT' : 'AVAILABLE'
+          }, { transaction });
+        }
+      } else {
+        // Bulk items: Update quantity number of items from source warehouse
+        const availableItems = await InventoryMaster.findAll({
+          where: {
+            material_id: materialId,
+            current_location_type: 'WAREHOUSE',
+            location_id: fromStockAreaId,
+            status: 'AVAILABLE',
+            serial_number: null, // Bulk items don't have serial numbers
+            is_active: true
+          },
+          limit: itemQuantity,
+          transaction
+        });
+
+        if (availableItems.length < itemQuantity) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: `Insufficient stock. Available: ${availableItems.length}, Requested: ${itemQuantity}`
+          });
+        }
+
+        // Update each item
+        for (const inventoryItem of availableItems) {
+          await inventoryItem.update({
+            current_location_type: destinationType,
+            location_id: destinationId,
+            ticket_id: ticketId || null,
+            status: destinationType === 'PERSON' ? 'IN_TRANSIT' : 'AVAILABLE'
+          }, { transaction });
+        }
+      }
     }
 
     await transaction.commit();
@@ -535,6 +648,7 @@ export const deleteStockTransfer = async (req, res) => {
     });
   }
 };
+
 
 
 

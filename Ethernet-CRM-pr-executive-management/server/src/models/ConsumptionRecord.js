@@ -12,6 +12,11 @@ const ConsumptionRecord = sequelize.define('consumption_record', {
     allowNull: false,
     comment: 'Reference ID from external system (e.g., customer ID, project ID)'
   },
+  ticket_id: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'External system ticket/work order ID (e.g., TKT-55S)'
+  },
   customer_data: {
     type: DataTypes.JSON,
     allowNull: true,
@@ -62,6 +67,9 @@ const ConsumptionRecord = sequelize.define('consumption_record', {
     },
     {
       fields: ['org_id']
+    },
+    {
+      fields: ['ticket_id']
     }
   ]
 });

@@ -22,6 +22,16 @@ const StockTransfer = sequelize.define('stock_transfer', {
     allowNull: true,
     comment: 'Reference to material request (if transfer is for a request)'
   },
+  ticket_id: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'External system ticket/work order ID (e.g., TKT-55S)'
+  },
+  to_user_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'User ID if transferring to a person (technician) instead of stock area'
+  },
   transfer_date: {
     type: DataTypes.DATEONLY,
     allowNull: false,
@@ -87,11 +97,18 @@ const StockTransfer = sequelize.define('stock_transfer', {
     },
     {
       fields: ['org_id']
+    },
+    {
+      fields: ['ticket_id']
+    },
+    {
+      fields: ['to_user_id']
     }
   ]
 });
 
 export default StockTransfer;
+
 
 
 

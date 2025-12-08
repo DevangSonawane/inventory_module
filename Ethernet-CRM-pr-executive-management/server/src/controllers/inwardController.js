@@ -2,6 +2,7 @@ import InwardEntry from '../models/InwardEntry.js';
 import InwardItem from '../models/InwardItem.js';
 import Material from '../models/Material.js';
 import StockArea from '../models/StockArea.js';
+import InventoryMaster from '../models/InventoryMaster.js';
 import { validationResult } from 'express-validator';
 import { Op } from 'sequelize';
 import sequelize from '../config/database.js';
@@ -110,10 +111,11 @@ export const createInward = async (req, res) => {
         });
       }
 
+      const itemQuantity = parseInt(quantity) || 1;
       const inwardItem = await InwardItem.create({
         inward_id: inwardEntry.inward_id,
         material_id: materialId,
-        quantity: parseInt(quantity) || 1,
+        quantity: itemQuantity,
         price: price ? parseFloat(price) : null,
         serial_number: serialNumber || null,
         mac_id: macId || null,
@@ -121,6 +123,51 @@ export const createInward = async (req, res) => {
       }, { transaction });
 
       createdItems.push(inwardItem);
+
+      // Create inventory_master records
+      // For serialized items: one record per serial number
+      // For bulk items: one record per unit (quantity)
+      if (serialNumber) {
+        // Serialized item - create one record with serial number
+        // Check if serial already exists
+        const existingSerial = await InventoryMaster.findOne({
+          where: { serial_number: serialNumber },
+          transaction
+        });
+
+        if (existingSerial) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: `Serial number ${serialNumber} already exists in inventory`
+          });
+        }
+
+        await InventoryMaster.create({
+          material_id: materialId,
+          serial_number: serialNumber,
+          mac_id: macId || null,
+          current_location_type: 'WAREHOUSE',
+          location_id: stockAreaId,
+          status: 'AVAILABLE',
+          inward_item_id: inwardItem.item_id,
+          org_id: req.body.orgId || null
+        }, { transaction });
+      } else {
+        // Bulk item - create one record per unit
+        for (let i = 0; i < itemQuantity; i++) {
+          await InventoryMaster.create({
+            material_id: materialId,
+            serial_number: null,
+            mac_id: null,
+            current_location_type: 'WAREHOUSE',
+            location_id: stockAreaId,
+            status: 'AVAILABLE',
+            inward_item_id: inwardItem.item_id,
+            org_id: req.body.orgId || null
+          }, { transaction });
+        }
+      }
     }
 
     await transaction.commit();
@@ -510,6 +557,7 @@ export const deleteInward = async (req, res) => {
     });
   }
 };
+
 
 
 

@@ -37,6 +37,16 @@ const MaterialRequest = sequelize.define('material_request', {
     allowNull: true,
     comment: 'Additional remarks or rejection reason'
   },
+  ticket_id: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'External system ticket/work order ID (e.g., TKT-55S)'
+  },
+  ticket_status: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'Ticket status from external system'
+  },
   org_id: {
     type: DataTypes.UUID,
     allowNull: true,
@@ -62,11 +72,15 @@ const MaterialRequest = sequelize.define('material_request', {
     },
     {
       fields: ['org_id']
+    },
+    {
+      fields: ['ticket_id']
     }
   ]
 });
 
 export default MaterialRequest;
+
 
 
 

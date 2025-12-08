@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "40c2e582-b7ca-48b4-88ec-479d32785784",
 		"name": "Inventory Management API - Complete",
-		"description": "Complete API collection for Inventory Management System including all endpoints for Materials, Stock Areas, Inward, Material Requests, Stock Transfers, Consumption, Reports, Stock Levels, Files, Audit, Notifications, Search, Bulk Operations, Export, and Validation",
+		"description": "Complete API collection for Inventory Management System including all endpoints for Materials, Stock Areas, Inward, Material Requests, Material Allocation, Stock Transfers, Consumption, Person Stock, Returns, Reports, Stock Levels, Files, Audit, Notifications, Search, Bulk Operations, Export, and Validation",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -655,6 +655,90 @@
 							"path": ["inventory", "material-request", "{{materialRequestId}}"]
 						}
 					}
+				},
+				{
+					"name": "Get Available Stock for Allocation",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/material-request/{{materialRequestId}}/available-stock?stockAreaId={{stockAreaId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "material-request", "{{materialRequestId}}", "available-stock"],
+							"query": [
+								{"key": "stockAreaId", "value": "{{stockAreaId}}", "disabled": true},
+								{"key": "materialId", "value": "", "disabled": true}
+							]
+						},
+						"description": "Get available inventory items for allocation to a material request"
+					}
+				},
+				{
+					"name": "Get Allocations",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/material-request/{{materialRequestId}}/allocations",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "material-request", "{{materialRequestId}}", "allocations"]
+						},
+						"description": "Get all allocations for a material request"
+					}
+				},
+				{
+					"name": "Allocate Items",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"allocations\": [\n    {\n      \"materialRequestItemId\": \"{{itemId}}\",\n      \"inventoryMasterIds\": [\"{{inventoryMasterId}}\"]\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/material-request/{{materialRequestId}}/allocate",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "material-request", "{{materialRequestId}}", "allocate"]
+						},
+						"description": "Allocate specific inventory items (serial numbers) to material request items"
+					}
+				},
+				{
+					"name": "Cancel Allocation",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/material-request/{{materialRequestId}}/allocations/{{allocationId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "material-request", "{{materialRequestId}}", "allocations", "{{allocationId}}"]
+						},
+						"description": "Cancel an allocation and return item to available stock"
+					}
 				}
 			]
 		},
@@ -1213,6 +1297,233 @@
 			]
 		},
 		{
+			"name": "Person Stock",
+			"item": [
+				{
+					"name": "Get Person Stock",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/person-stock?userId={{userId}}&page=1&limit=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "person-stock"],
+							"query": [
+								{"key": "userId", "value": "{{userId}}"},
+								{"key": "ticketId", "value": "", "disabled": true},
+								{"key": "materialId", "value": "", "disabled": true},
+								{"key": "status", "value": "", "disabled": true},
+								{"key": "page", "value": "1"},
+								{"key": "limit", "value": "10"}
+							]
+						},
+						"description": "Get inventory items assigned to a technician (person stock)"
+					}
+				},
+				{
+					"name": "Get Person Stock By Ticket",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/person-stock/ticket/{{ticketId}}?userId={{userId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "person-stock", "ticket", "{{ticketId}}"],
+							"query": [
+								{"key": "userId", "value": "{{userId}}"},
+								{"key": "status", "value": "", "disabled": true}
+							]
+						},
+						"description": "Get person stock items for a specific ticket"
+					}
+				},
+				{
+					"name": "Search Person Stock By Serial",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/person-stock/search?serialNumber=SN-001&userId={{userId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "person-stock", "search"],
+							"query": [
+								{"key": "serialNumber", "value": "SN-001"},
+								{"key": "userId", "value": "{{userId}}", "disabled": true},
+								{"key": "ticketId", "value": "", "disabled": true}
+							]
+						},
+						"description": "Search for a specific serial number in person stock"
+					}
+				}
+			]
+		},
+		{
+			"name": "Returns",
+			"item": [
+				{
+					"name": "Get Available Items for Return",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/returns/available-items?technicianId={{userId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "returns", "available-items"],
+							"query": [
+								{"key": "technicianId", "value": "{{userId}}"},
+								{"key": "ticketId", "value": "", "disabled": true},
+								{"key": "materialId", "value": "", "disabled": true}
+							]
+						},
+						"description": "Get items available for return from technician's person stock"
+					}
+				},
+				{
+					"name": "Get All Returns",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/returns?page=1&limit=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "returns"],
+							"query": [
+								{"key": "page", "value": "1"},
+								{"key": "limit", "value": "10"},
+								{"key": "technicianId", "value": "", "disabled": true},
+								{"key": "status", "value": "", "disabled": true},
+								{"key": "reason", "value": "", "disabled": true},
+								{"key": "dateFrom", "value": "", "disabled": true},
+								{"key": "dateTo", "value": "", "disabled": true}
+							]
+						},
+						"description": "Get all return records with filtering and pagination"
+					}
+				},
+				{
+					"name": "Get Return By ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/returns/{{returnId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "returns", "{{returnId}}"]
+						},
+						"description": "Get single return record by ID"
+					}
+				},
+				{
+					"name": "Create Return",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"ticketId\": \"TKT-55S\",\n  \"returnDate\": \"2025-12-06\",\n  \"reason\": \"UNUSED\",\n  \"items\": [\n    {\n      \"materialId\": \"{{materialId}}\",\n      \"inventoryMasterId\": \"{{inventoryMasterId}}\",\n      \"serialNumber\": \"SN-001\",\n      \"quantity\": 1,\n      \"remarks\": \"Not needed for this ticket\"\n    }\n  ],\n  \"remarks\": \"Returning unused items\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/returns",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "returns"]
+						},
+						"description": "Create a new return record for items from person stock"
+					}
+				},
+				{
+					"name": "Approve Return",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"stockAreaId\": \"{{stockAreaId}}\",\n  \"remarks\": \"Approved and transferred to warehouse\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/returns/{{returnId}}/approve",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "returns", "{{returnId}}", "approve"]
+						},
+						"description": "Approve return and transfer items back to warehouse"
+					}
+				},
+				{
+					"name": "Reject Return",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"remarks\": \"Rejected - items still needed\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/returns/{{returnId}}/reject",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "returns", "{{returnId}}", "reject"]
+						},
+						"description": "Reject a return request"
+					}
+				}
+			]
+		},
+		{
 			"name": "Search",
 			"item": [
 				{
@@ -1502,9 +1813,35 @@
 			"key": "filename",
 			"value": "",
 			"type": "string"
+		},
+		{
+			"key": "userId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "inventoryMasterId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "allocationId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "returnId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "ticketId",
+			"value": "",
+			"type": "string"
 		}
 	]
 }
+
 
 
 

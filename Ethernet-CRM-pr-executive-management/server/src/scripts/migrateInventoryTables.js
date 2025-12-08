@@ -135,7 +135,9 @@ const runMigration = async (silent = false) => {
           \`location_id\` VARCHAR(255) NULL COMMENT 'Stock Area ID (UUID) or User ID (INTEGER)',
           \`status\` ENUM('AVAILABLE', 'FAULTY', 'ALLOCATED', 'IN_TRANSIT', 'CONSUMED') NOT NULL DEFAULT 'AVAILABLE',
           \`inward_item_id\` ${itemIdType} NULL COMMENT 'Which inward_item created this inventory entry',
+          \`ticket_id\` VARCHAR(100) NULL COMMENT 'Linked ticket/work order ID if in PERSON stock (e.g., TKT-55S)',
           \`org_id\` CHAR(36) NULL,
+          \`is_active\` BOOLEAN NOT NULL DEFAULT TRUE,
           \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           INDEX \`idx_material_id\` (\`material_id\`),
@@ -143,7 +145,9 @@ const runMigration = async (silent = false) => {
           INDEX \`idx_mac_id\` (\`mac_id\`),
           INDEX \`idx_location\` (\`current_location_type\`, \`location_id\`),
           INDEX \`idx_status\` (\`status\`),
-          INDEX \`idx_inward_item\` (\`inward_item_id\`)
+          INDEX \`idx_inward_item\` (\`inward_item_id\`),
+          INDEX \`idx_ticket_id\` (\`ticket_id\`),
+          INDEX \`idx_is_active\` (\`is_active\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
       `, { type: QueryTypes.RAW });
       
@@ -193,6 +197,49 @@ const runMigration = async (silent = false) => {
       }
     } else {
       if (!silent) console.log('   ℹ️  inventory_master table already exists');
+      
+      // Add missing columns if table exists but columns don't
+      if (!(await columnExists('inventory_master', 'ticket_id'))) {
+        if (!silent) console.log('   Adding ticket_id to inventory_master...');
+        try {
+          await sequelize.query(`
+            ALTER TABLE \`inventory_master\`
+            ADD COLUMN \`ticket_id\` VARCHAR(100) NULL COMMENT 'Linked ticket/work order ID if in PERSON stock (e.g., TKT-55S)' AFTER \`inward_item_id\`;
+          `, { type: QueryTypes.RAW });
+          await sequelize.query(`
+            ALTER TABLE \`inventory_master\`
+            ADD INDEX \`idx_ticket_id\` (\`ticket_id\`);
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ Added ticket_id to inventory_master');
+        } catch (e) {
+          if (e.message && (e.message.includes('Duplicate column') || e.message.includes('already exists'))) {
+            if (!silent) console.log('   ℹ️  ticket_id already exists in inventory_master');
+          } else {
+            throw e;
+          }
+        }
+      }
+      
+      if (!(await columnExists('inventory_master', 'is_active'))) {
+        if (!silent) console.log('   Adding is_active to inventory_master...');
+        try {
+          await sequelize.query(`
+            ALTER TABLE \`inventory_master\`
+            ADD COLUMN \`is_active\` BOOLEAN NOT NULL DEFAULT TRUE AFTER \`org_id\`;
+          `, { type: QueryTypes.RAW });
+          await sequelize.query(`
+            ALTER TABLE \`inventory_master\`
+            ADD INDEX \`idx_is_active\` (\`is_active\`);
+          `, { type: QueryTypes.RAW });
+          if (!silent) console.log('   ✅ Added is_active to inventory_master');
+        } catch (e) {
+          if (e.message && (e.message.includes('Duplicate column') || e.message.includes('already exists'))) {
+            if (!silent) console.log('   ℹ️  is_active already exists in inventory_master');
+          } else {
+            throw e;
+          }
+        }
+      }
     }
 
     // 2. MATERIAL ALLOCATION
@@ -767,6 +814,73 @@ const runMigration = async (silent = false) => {
       if (!silent) console.log('   ℹ️  Columns already exist in consumption_records');
     }
 
+    // Add ticket_id fields to material_requests, stock_transfers, consumption_records
+    if (!(await columnExists('material_requests', 'ticket_id'))) {
+      if (!silent) console.log('   Adding ticket_id to material_requests...');
+      try {
+        await sequelize.query(`
+          ALTER TABLE \`material_requests\`
+          ADD COLUMN \`ticket_id\` VARCHAR(100) NULL COMMENT 'External system ticket/work order ID (e.g., TKT-55S)' AFTER \`remarks\`,
+          ADD COLUMN \`ticket_status\` VARCHAR(50) NULL COMMENT 'Ticket status from external system' AFTER \`ticket_id\`;
+        `, { type: QueryTypes.RAW });
+        await sequelize.query(`
+          ALTER TABLE \`material_requests\`
+          ADD INDEX \`idx_ticket_id\` (\`ticket_id\`);
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ Added ticket_id to material_requests');
+      } catch (e) {
+        if (e.message && (e.message.includes('Duplicate column') || e.message.includes('already exists'))) {
+          if (!silent) console.log('   ℹ️  ticket_id already exists in material_requests');
+        } else {
+          throw e;
+        }
+      }
+    }
+
+    if (!(await columnExists('stock_transfers', 'ticket_id'))) {
+      if (!silent) console.log('   Adding ticket_id and to_user_id to stock_transfers...');
+      try {
+        await sequelize.query(`
+          ALTER TABLE \`stock_transfers\`
+          ADD COLUMN \`ticket_id\` VARCHAR(100) NULL COMMENT 'External system ticket/work order ID (e.g., TKT-55S)' AFTER \`material_request_id\`,
+          ADD COLUMN \`to_user_id\` INT NULL COMMENT 'User ID if transferring to a person (technician) instead of stock area' AFTER \`ticket_id\`;
+        `, { type: QueryTypes.RAW });
+        await sequelize.query(`
+          ALTER TABLE \`stock_transfers\`
+          ADD INDEX \`idx_ticket_id\` (\`ticket_id\`),
+          ADD INDEX \`idx_to_user_id\` (\`to_user_id\`);
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ Added ticket_id and to_user_id to stock_transfers');
+      } catch (e) {
+        if (e.message && (e.message.includes('Duplicate column') || e.message.includes('already exists'))) {
+          if (!silent) console.log('   ℹ️  ticket_id already exists in stock_transfers');
+        } else {
+          throw e;
+        }
+      }
+    }
+
+    if (!(await columnExists('consumption_records', 'ticket_id'))) {
+      if (!silent) console.log('   Adding ticket_id to consumption_records...');
+      try {
+        await sequelize.query(`
+          ALTER TABLE \`consumption_records\`
+          ADD COLUMN \`ticket_id\` VARCHAR(100) NULL COMMENT 'External system ticket/work order ID (e.g., TKT-55S)' AFTER \`external_system_ref_id\`;
+        `, { type: QueryTypes.RAW });
+        await sequelize.query(`
+          ALTER TABLE \`consumption_records\`
+          ADD INDEX \`idx_ticket_id\` (\`ticket_id\`);
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ Added ticket_id to consumption_records');
+      } catch (e) {
+        if (e.message && (e.message.includes('Duplicate column') || e.message.includes('already exists'))) {
+          if (!silent) console.log('   ℹ️  ticket_id already exists in consumption_records');
+        } else {
+          throw e;
+        }
+      }
+    }
+
     // Link Inward to Purchase Order
     if (!(await columnExists('inward_entries', 'po_id'))) {
       if (!silent) console.log('   Adding po_id to inward_entries...');
@@ -817,12 +931,158 @@ const runMigration = async (silent = false) => {
       if (!silent) console.log('   ℹ️  po_id already exists in inward_entries');
     }
 
+    // 10. RETURN RECORDS
+    if (!(await tableExists('return_records'))) {
+      if (!silent) console.log('   Creating return_records table...');
+      
+      // Get actual column types
+      const consumptionIdInfo = await getColumnType('consumption_records', 'consumption_id');
+      const consumptionIdType = consumptionIdInfo.fullType || 'CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci';
+      
+      await sequelize.query(`
+        CREATE TABLE \`return_records\` (
+          \`return_id\` CHAR(36) NOT NULL PRIMARY KEY,
+          \`consumption_id\` ${consumptionIdType} NULL COMMENT 'Link to original consumption if applicable',
+          \`ticket_id\` VARCHAR(100) NULL COMMENT 'External system ticket/work order ID (e.g., TKT-55S)',
+          \`technician_id\` INT NOT NULL COMMENT 'User ID of technician returning items',
+          \`return_date\` DATE NOT NULL COMMENT 'Date of return',
+          \`reason\` ENUM('UNUSED', 'FAULTY', 'CANCELLED') NOT NULL COMMENT 'Reason for return',
+          \`remarks\` TEXT NULL COMMENT 'Additional remarks',
+          \`status\` ENUM('PENDING', 'APPROVED', 'REJECTED') NOT NULL DEFAULT 'PENDING' COMMENT 'Status of return request',
+          \`approved_by\` INT NULL COMMENT 'User ID who approved/rejected the return',
+          \`approval_date\` DATETIME NULL COMMENT 'Date of approval/rejection',
+          \`org_id\` CHAR(36) NULL COMMENT 'Organization ID for multi-tenant support',
+          \`created_by\` INT NULL COMMENT 'User ID who created this return record',
+          \`updated_by\` INT NULL COMMENT 'User ID who last updated this return record',
+          \`is_active\` BOOLEAN NOT NULL DEFAULT TRUE,
+          \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX \`idx_consumption_id\` (\`consumption_id\`),
+          INDEX \`idx_ticket_id\` (\`ticket_id\`),
+          INDEX \`idx_technician_id\` (\`technician_id\`),
+          INDEX \`idx_return_date\` (\`return_date\`),
+          INDEX \`idx_reason\` (\`reason\`),
+          INDEX \`idx_status\` (\`status\`),
+          INDEX \`idx_org_id\` (\`org_id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `, { type: QueryTypes.RAW });
+      
+      // Add foreign keys
+      try {
+        await sequelize.query(`
+          ALTER TABLE \`return_records\`
+          ADD CONSTRAINT \`fk_return_consumption\` 
+          FOREIGN KEY (\`consumption_id\`) REFERENCES \`consumption_records\`(\`consumption_id\`) ON DELETE SET NULL;
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ Added consumption_id foreign key');
+      } catch (e) {
+        if (!silent) console.log('   ⚠️  Could not add consumption_id foreign key');
+      }
+      
+      try {
+        await sequelize.query(`
+          ALTER TABLE \`return_records\`
+          ADD CONSTRAINT \`fk_return_technician\` 
+          FOREIGN KEY (\`technician_id\`) REFERENCES \`users\`(\`id\`) ON DELETE RESTRICT;
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ Added technician_id foreign key');
+      } catch (e) {
+        if (!silent) console.log('   ⚠️  Could not add technician_id foreign key');
+      }
+      
+      try {
+        await sequelize.query(`
+          ALTER TABLE \`return_records\`
+          ADD CONSTRAINT \`fk_return_approver\` 
+          FOREIGN KEY (\`approved_by\`) REFERENCES \`users\`(\`id\`) ON DELETE SET NULL;
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ Added approved_by foreign key');
+      } catch (e) {
+        if (!silent) console.log('   ⚠️  Could not add approved_by foreign key');
+      }
+      
+      if (!silent) console.log('   ✅ return_records table created');
+    } else {
+      if (!silent) console.log('   ℹ️  return_records table already exists');
+    }
+
+    // 11. RETURN ITEMS
+    if (!(await tableExists('return_items'))) {
+      if (!silent) console.log('   Creating return_items table...');
+      
+      // Get actual column types
+      const returnIdInfo = await getColumnType('return_records', 'return_id');
+      const materialIdInfo = await getColumnType('materials', 'material_id');
+      const inventoryIdInfo = await getColumnType('inventory_master', 'id');
+      
+      const returnIdType = returnIdInfo.fullType || 'CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci';
+      const materialIdType = materialIdInfo.fullType || 'CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci';
+      const inventoryIdType = inventoryIdInfo.fullType || 'CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci';
+      
+      await sequelize.query(`
+        CREATE TABLE \`return_items\` (
+          \`item_id\` CHAR(36) NOT NULL PRIMARY KEY,
+          \`return_id\` ${returnIdType} NOT NULL COMMENT 'Reference to return record',
+          \`material_id\` ${materialIdType} NOT NULL COMMENT 'Reference to material',
+          \`inventory_master_id\` ${inventoryIdType} NULL COMMENT 'Reference to specific inventory item (if serialized)',
+          \`serial_number\` VARCHAR(100) NULL COMMENT 'Serial number (if applicable)',
+          \`mac_id\` VARCHAR(100) NULL COMMENT 'MAC ID (if applicable)',
+          \`quantity\` INT NOT NULL DEFAULT 1 COMMENT 'Quantity returned',
+          \`remarks\` TEXT NULL COMMENT 'Additional remarks for this item',
+          \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX \`idx_return_id\` (\`return_id\`),
+          INDEX \`idx_material_id\` (\`material_id\`),
+          INDEX \`idx_inventory_master_id\` (\`inventory_master_id\`),
+          INDEX \`idx_serial_number\` (\`serial_number\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `, { type: QueryTypes.RAW });
+      
+      // Add foreign keys
+      try {
+        await sequelize.query(`
+          ALTER TABLE \`return_items\`
+          ADD CONSTRAINT \`fk_return_item_return\` 
+          FOREIGN KEY (\`return_id\`) REFERENCES \`return_records\`(\`return_id\`) ON DELETE CASCADE;
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ Added return_id foreign key');
+      } catch (e) {
+        if (!silent) console.log('   ⚠️  Could not add return_id foreign key');
+      }
+      
+      try {
+        await sequelize.query(`
+          ALTER TABLE \`return_items\`
+          ADD CONSTRAINT \`fk_return_item_material\` 
+          FOREIGN KEY (\`material_id\`) REFERENCES \`materials\`(\`material_id\`) ON DELETE RESTRICT;
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ Added material_id foreign key');
+      } catch (e) {
+        if (!silent) console.log('   ⚠️  Could not add material_id foreign key');
+      }
+      
+      try {
+        await sequelize.query(`
+          ALTER TABLE \`return_items\`
+          ADD CONSTRAINT \`fk_return_item_inventory\` 
+          FOREIGN KEY (\`inventory_master_id\`) REFERENCES \`inventory_master\`(\`id\`) ON DELETE SET NULL;
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ Added inventory_master_id foreign key');
+      } catch (e) {
+        if (!silent) console.log('   ⚠️  Could not add inventory_master_id foreign key');
+      }
+      
+      if (!silent) console.log('   ✅ return_items table created');
+    } else {
+      if (!silent) console.log('   ℹ️  return_items table already exists');
+    }
+
     if (!silent) {
       console.log('\n' + '='.repeat(60));
       console.log('✅ MIGRATION COMPLETED SUCCESSFULLY!');
       console.log('='.repeat(60));
       console.log('\n📊 Summary:');
-      console.log('   ✅ Created 9 new tables');
+      console.log('   ✅ Created 11 new tables');
       console.log('   ✅ Added missing columns to existing tables');
       console.log('   ✅ All foreign keys and indexes created');
       console.log('\n🎉 Your database is now ready for the complete inventory workflow!\n');
