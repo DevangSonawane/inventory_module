@@ -1,6 +1,8 @@
 import os from 'os';
 import app from './app.js';
 import { connectDB } from './config/database.js';
+// Import models to ensure associations are loaded
+import './models/index.js';
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';

@@ -271,6 +271,10 @@ export const connectDB = async () => {
     await sequelize.authenticate();
     console.log('✅ Database connection established successfully.');
 
+    // Import models to ensure associations are loaded after database connection
+    // This must be done after authenticate() to ensure sequelize instance is ready
+    await import('../models/index.js');
+
     // Ensure required columns exist
     // await ensureUserColumnsExist();
     // await ensureSurveyColumnsExist();
