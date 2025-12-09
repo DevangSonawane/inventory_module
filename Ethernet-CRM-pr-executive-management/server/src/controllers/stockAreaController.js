@@ -13,7 +13,6 @@ export const getAllStockAreas = async (req, res) => {
       page = 1,
       limit = 50,
       search = '',
-      orgId = '',
       showInactive = false
     } = req.query;
 
@@ -22,11 +21,7 @@ export const getAllStockAreas = async (req, res) => {
     const offset = (pageNumber - 1) * limitNumber;
 
     // Build where clause
-    const whereClause = {};
-
-    if (orgId) {
-      whereClause.org_id = orgId;
-    }
+    const whereClause = req.withOrg ? req.withOrg({}) : {};
 
     if (!showInactive || showInactive === 'false') {
       whereClause.is_active = true;
@@ -90,10 +85,15 @@ export const getStockAreaById = async (req, res) => {
     const { id } = req.params;
 
     const stockArea = await StockArea.findOne({
-      where: {
-        area_id: id,
-        is_active: true
-      }
+      where: req.withOrg
+        ? req.withOrg({
+          area_id: id,
+          is_active: true
+        })
+        : {
+          area_id: id,
+          is_active: true
+        }
     });
 
     if (!stockArea) {
@@ -128,7 +128,7 @@ export const createStockArea = async (req, res) => {
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
-    const { areaName, locationCode, address, capacity, storeKeeperId, orgId } = req.body;
+    const { areaName, locationCode, address, capacity, storeKeeperId } = req.body;
 
     const stockArea = await StockArea.create({
       area_name: areaName,
@@ -136,7 +136,7 @@ export const createStockArea = async (req, res) => {
       address: address || null,
       capacity: capacity || null,
       store_keeper_id: storeKeeperId || null,
-      org_id: orgId || null,
+      org_id: req.orgId || null,
       is_active: true
     });
 
@@ -170,10 +170,15 @@ export const updateStockArea = async (req, res) => {
     const { areaName, locationCode, address, capacity, storeKeeperId } = req.body;
 
     const stockArea = await StockArea.findOne({
-      where: {
-        area_id: id,
-        is_active: true
-      }
+      where: req.withOrg
+        ? req.withOrg({
+          area_id: id,
+          is_active: true
+        })
+        : {
+          area_id: id,
+          is_active: true
+        }
     });
 
     if (!stockArea) {
@@ -215,10 +220,15 @@ export const deleteStockArea = async (req, res) => {
     const { id } = req.params;
 
     const stockArea = await StockArea.findOne({
-      where: {
-        area_id: id,
-        is_active: true
-      }
+      where: req.withOrg
+        ? req.withOrg({
+          area_id: id,
+          is_active: true
+        })
+        : {
+          area_id: id,
+          is_active: true
+        }
     });
 
     if (!stockArea) {

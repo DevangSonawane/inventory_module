@@ -8,6 +8,7 @@ import travelTrackerRoutes from './travelTrackerRoute.js';
 import inventoryRoutes from './inventoryRoutes.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 import { requestLogger } from '../middleware/requestLogger.js';
+import { getMetricsSnapshot } from '../middleware/metrics.js';
 const router = express.Router();
 
 // Health check
@@ -30,5 +31,13 @@ router.use('/role', roleRoutes);
 router.use('/module', moduleRoutes);
 router.use('/users', userRoutes);
 router.use('/travelTracker', travelTrackerRoutes);
+
+// Metrics endpoint (in-process metrics, not suitable for multi-instance without shared store)
+router.get('/metrics', (req, res) => {
+  res.status(200).json({
+    success: true,
+    data: getMetricsSnapshot()
+  });
+});
 
 export default router;

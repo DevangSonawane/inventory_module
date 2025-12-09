@@ -70,3 +70,5 @@ const BusinessPartner = sequelize.define('business_partner', {
 
 export default BusinessPartner;
 
+
+

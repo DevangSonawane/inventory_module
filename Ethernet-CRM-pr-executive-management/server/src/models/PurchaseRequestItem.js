@@ -50,3 +50,5 @@ const PurchaseRequestItem = sequelize.define('purchase_request_item', {
 
 export default PurchaseRequestItem;
 
+
+

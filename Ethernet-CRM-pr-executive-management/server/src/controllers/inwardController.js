@@ -41,7 +41,9 @@ export const createInward = async (req, res) => {
 
     // Validate stock area exists
     const stockArea = await StockArea.findOne({
-      where: { area_id: stockAreaId, is_active: true }
+      where: req.withOrg
+        ? req.withOrg({ area_id: stockAreaId, is_active: true })
+        : { area_id: stockAreaId, is_active: true }
     });
 
     if (!stockArea) {
@@ -68,7 +70,9 @@ export const createInward = async (req, res) => {
     
     while (!isUnique && attempts < 10) {
       const existing = await InwardEntry.findOne({
-        where: { slip_number: slipNumber }
+        where: req.withOrg
+          ? req.withOrg({ slip_number: slipNumber })
+          : { slip_number: slipNumber }
       });
       if (!existing) {
         isUnique = true;
@@ -91,7 +95,7 @@ export const createInward = async (req, res) => {
       status: 'DRAFT', // Start as DRAFT, will be marked COMPLETED after verification
       remark: remark || null,
       documents: documents || null,
-      org_id: req.body.orgId || null,
+      org_id: req.orgId || null,
       created_by: userId,
       updated_by: userId,
       is_active: true
@@ -104,7 +108,9 @@ export const createInward = async (req, res) => {
 
       // Validate material exists
       const material = await Material.findOne({
-        where: { material_id: materialId, is_active: true }
+        where: req.withOrg
+          ? req.withOrg({ material_id: materialId, is_active: true })
+          : { material_id: materialId, is_active: true }
       });
 
       if (!material) {
@@ -187,7 +193,6 @@ export const getAllInwards = async (req, res) => {
       dateFrom = '',
       dateTo = '',
       status = '',
-      orgId = '',
       showInactive = false
     } = req.query;
 
@@ -196,11 +201,7 @@ export const getAllInwards = async (req, res) => {
     const offset = (pageNumber - 1) * limitNumber;
 
     // Build where clause
-    const whereClause = {};
-
-    if (orgId) {
-      whereClause.org_id = orgId;
-    }
+    const whereClause = req.withOrg ? req.withOrg({}) : {};
 
     if (!showInactive || showInactive === 'false') {
       whereClause.is_active = true;
@@ -287,10 +288,15 @@ export const getInwardById = async (req, res) => {
     const { id } = req.params;
 
     const inward = await InwardEntry.findOne({
-      where: {
-        inward_id: id,
-        is_active: true
-      },
+      where: req.withOrg
+        ? req.withOrg({
+          inward_id: id,
+          is_active: true
+        })
+        : {
+          inward_id: id,
+          is_active: true
+        },
       include: [
         {
           model: InwardItem,
@@ -361,10 +367,15 @@ export const updateInward = async (req, res) => {
     const userId = req.user?.id || req.user?.user_id;
 
     const inward = await InwardEntry.findOne({
-      where: {
-        inward_id: id,
-        is_active: true
-      }
+      where: req.withOrg
+        ? req.withOrg({
+          inward_id: id,
+          is_active: true
+        })
+        : {
+          inward_id: id,
+          is_active: true
+        }
     }, { transaction });
 
     if (!inward) {
@@ -378,7 +389,9 @@ export const updateInward = async (req, res) => {
     // Validate stock area if provided
     if (stockAreaId && stockAreaId !== inward.stock_area_id) {
       const stockArea = await StockArea.findOne({
-        where: { area_id: stockAreaId, is_active: true }
+        where: req.withOrg
+          ? req.withOrg({ area_id: stockAreaId, is_active: true })
+          : { area_id: stockAreaId, is_active: true }
       });
 
       if (!stockArea) {
@@ -417,7 +430,9 @@ export const updateInward = async (req, res) => {
         const { materialId, quantity, price, serialNumber, macId, remarks } = item;
 
         const material = await Material.findOne({
-          where: { material_id: materialId, is_active: true }
+          where: req.withOrg
+            ? req.withOrg({ material_id: materialId, is_active: true })
+            : { material_id: materialId, is_active: true }
         });
 
         if (!material) {
@@ -489,10 +504,15 @@ export const deleteInward = async (req, res) => {
     const userId = req.user?.id || req.user?.user_id;
 
     const inward = await InwardEntry.findOne({
-      where: {
-        inward_id: id,
-        is_active: true
-      }
+      where: req.withOrg
+        ? req.withOrg({
+          inward_id: id,
+          is_active: true
+        })
+        : {
+          inward_id: id,
+          is_active: true
+        }
     });
 
     if (!inward) {
@@ -539,10 +559,15 @@ export const markInwardAsCompleted = async (req, res) => {
 
     // Find inward entry
     const inward = await InwardEntry.findOne({
-      where: {
-        inward_id: id,
-        is_active: true
-      },
+      where: req.withOrg
+        ? req.withOrg({
+          inward_id: id,
+          is_active: true
+        })
+        : {
+          inward_id: id,
+          is_active: true
+        },
       include: [
         {
           model: InwardItem,
@@ -613,9 +638,10 @@ export const markInwardAsCompleted = async (req, res) => {
       if (item.serial_number) {
         // Check if serial already exists
         const existingSerial = await InventoryMaster.findOne({
-          where: { 
+          where: {
             serial_number: item.serial_number,
-            is_active: true
+            is_active: true,
+            ...(req.orgId ? { org_id: req.orgId } : {})
           },
           transaction
         });
@@ -632,7 +658,8 @@ export const markInwardAsCompleted = async (req, res) => {
         const existingInventory = await InventoryMaster.findOne({
           where: {
             inward_item_id: item.item_id,
-            is_active: true
+            is_active: true,
+            ...(req.orgId ? { org_id: req.orgId } : {})
           },
           transaction
         });
@@ -651,13 +678,14 @@ export const markInwardAsCompleted = async (req, res) => {
         }
       } else {
         // Non-serialized item - check if inventory records exist
-        const existingCount = await InventoryMaster.count({
-          where: {
-            inward_item_id: item.item_id,
-            is_active: true
-          },
-          transaction
-        });
+          const existingCount = await InventoryMaster.count({
+            where: {
+              inward_item_id: item.item_id,
+              is_active: true,
+              ...(req.orgId ? { org_id: req.orgId } : {})
+            },
+            transaction
+          });
 
         // Create missing records (one per unit)
         const recordsToCreate = itemQuantity - existingCount;

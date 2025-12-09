@@ -24,8 +24,7 @@ export const createMaterialRequest = async (req, res) => {
     const {
       prNumbers, // Array of {prNumber, prDate}
       items, // Array of {materialId, requestedQuantity, uom, remarks}
-      remarks,
-      orgId
+      remarks
     } = req.body;
 
     const userId = req.user?.id || req.user?.user_id;
@@ -54,7 +53,7 @@ export const createMaterialRequest = async (req, res) => {
       status: 'DRAFT',
       requested_by: userId,
       remarks: remarks || null,
-      org_id: orgId || null,
+      org_id: req.orgId || null,
       is_active: true
     }, { transaction });
 
@@ -65,7 +64,9 @@ export const createMaterialRequest = async (req, res) => {
 
       // Validate material exists
       const material = await Material.findOne({
-        where: { material_id: materialId, is_active: true }
+        where: req.withOrg
+          ? req.withOrg({ material_id: materialId, is_active: true })
+          : { material_id: materialId, is_active: true }
       });
 
       if (!material) {
@@ -140,7 +141,6 @@ export const getAllMaterialRequests = async (req, res) => {
       search = '',
       status = '',
       requestedBy = '',
-      orgId = '',
       showInactive = false
     } = req.query;
 
@@ -148,11 +148,7 @@ export const getAllMaterialRequests = async (req, res) => {
     const limitNumber = Math.max(parseInt(limit, 10) || 50, 1);
     const offset = (pageNumber - 1) * limitNumber;
 
-    const whereClause = {};
-
-    if (orgId) {
-      whereClause.org_id = orgId;
-    }
+    const whereClause = req.withOrg ? req.withOrg({}) : {};
 
     if (!showInactive || showInactive === 'false') {
       whereClause.is_active = true;
@@ -219,10 +215,15 @@ export const getMaterialRequestById = async (req, res) => {
     const { id } = req.params;
 
     const request = await MaterialRequest.findOne({
-      where: {
-        request_id: id,
-        is_active: true
-      },
+      where: req.withOrg
+        ? req.withOrg({
+          request_id: id,
+          is_active: true
+        })
+        : {
+          request_id: id,
+          is_active: true
+        },
       include: [
         {
           model: MaterialRequestItem,
@@ -291,10 +292,15 @@ export const updateMaterialRequest = async (req, res) => {
     } = req.body;
 
     const materialRequest = await MaterialRequest.findOne({
-      where: {
-        request_id: id,
-        is_active: true
-      }
+      where: req.withOrg
+        ? req.withOrg({
+          request_id: id,
+          is_active: true
+        })
+        : {
+          request_id: id,
+          is_active: true
+        }
     }, { transaction });
 
     if (!materialRequest) {
@@ -323,7 +329,9 @@ export const updateMaterialRequest = async (req, res) => {
         const { materialId, requestedQuantity, approvedQuantity, uom, remarks: itemRemarks } = item;
 
         const material = await Material.findOne({
-          where: { material_id: materialId, is_active: true }
+          where: req.withOrg
+            ? req.withOrg({ material_id: materialId, is_active: true })
+            : { material_id: materialId, is_active: true }
         });
 
         if (!material) {
@@ -399,10 +407,15 @@ export const approveMaterialRequest = async (req, res) => {
     const userId = req.user?.id || req.user?.user_id;
 
     const materialRequest = await MaterialRequest.findOne({
-      where: {
-        request_id: id,
-        is_active: true
-      },
+      where: req.withOrg
+        ? req.withOrg({
+          request_id: id,
+          is_active: true
+        })
+        : {
+          request_id: id,
+          is_active: true
+        },
       include: [
         {
           model: MaterialRequestItem,
@@ -503,10 +516,15 @@ export const deleteMaterialRequest = async (req, res) => {
     const { id } = req.params;
 
     const materialRequest = await MaterialRequest.findOne({
-      where: {
-        request_id: id,
-        is_active: true
-      }
+      where: req.withOrg
+        ? req.withOrg({
+          request_id: id,
+          is_active: true
+        })
+        : {
+          request_id: id,
+          is_active: true
+        }
     });
 
     if (!materialRequest) {
@@ -533,6 +551,8 @@ export const deleteMaterialRequest = async (req, res) => {
     });
   }
 };
+
+
 
 
 

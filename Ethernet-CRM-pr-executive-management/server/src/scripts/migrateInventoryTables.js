@@ -61,6 +61,36 @@ const runMigration = async (silent = false) => {
       }
     };
 
+    // Helper to check if an index exists on a table
+    const indexExists = async (tableName, indexName) => {
+      try {
+        const results = await sequelize.query(`
+          SELECT INDEX_NAME 
+          FROM INFORMATION_SCHEMA.STATISTICS 
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = '${tableName}'
+            AND INDEX_NAME = '${indexName}'
+        `, { type: QueryTypes.SELECT });
+        return Array.isArray(results) && results.length > 0;
+      } catch (error) {
+        return false;
+      }
+    };
+
+    // Helper to create index if missing (columns as string e.g., "(col1, col2)")
+    const ensureIndex = async (tableName, indexName, columns) => {
+      if (await indexExists(tableName, indexName)) return;
+      try {
+        await sequelize.query(`
+          ALTER TABLE \`${tableName}\`
+          ADD INDEX \`${indexName}\` ${columns};
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log(`   ✅ Added index ${indexName} on ${tableName}${columns}`);
+      } catch (error) {
+        if (!silent) console.log(`   ⚠️  Could not add index ${indexName} on ${tableName}: ${error.message}`);
+      }
+    };
+
     // Helper function to get column type from existing table
     const getColumnType = async (tableName, columnName) => {
       try {
@@ -881,6 +911,41 @@ const runMigration = async (silent = false) => {
       }
     }
 
+    // ============================================================
+    // PART 3: ADD SEARCH-ORIENTED INDEXES
+    // ============================================================
+    if (!silent) console.log('\n🔎 Adding search-performance indexes...\n');
+
+    // Inward entries
+    await ensureIndex('inward_entries', 'idx_inward_slip', '(`slip_number`)');
+    await ensureIndex('inward_entries', 'idx_inward_invoice', '(`invoice_number`)');
+    await ensureIndex('inward_entries', 'idx_inward_purchase_order', '(`purchase_order`)');
+    await ensureIndex('inward_entries', 'idx_inward_party', '(`party_name`)');
+    await ensureIndex('inward_entries', 'idx_inward_status', '(`status`)');
+
+    // Stock transfers
+    await ensureIndex('stock_transfers', 'idx_transfer_number', '(`transfer_number`)');
+    await ensureIndex('stock_transfers', 'idx_transfer_ticket', '(`ticket_id`)');
+    await ensureIndex('stock_transfers', 'idx_transfer_status', '(`status`)');
+
+    // Purchase orders / requests
+    await ensureIndex('purchase_orders', 'idx_po_number_search', '(`po_number`)');
+    await ensureIndex('purchase_orders', 'idx_po_status_search', '(`status`)');
+    await ensureIndex('purchase_requests', 'idx_pr_number_search', '(`pr_number`)');
+    await ensureIndex('purchase_requests', 'idx_pr_status_search', '(`status`)');
+    await ensureIndex('purchase_requests', 'idx_pr_requested_date', '(`requested_date`)');
+
+    // Business partners
+    await ensureIndex('business_partners', 'idx_partner_name_search', '(`partner_name`)');
+    await ensureIndex('business_partners', 'idx_partner_type_search', '(`partner_type`)');
+
+    // Consumption and returns
+    await ensureIndex('consumption_records', 'idx_consumption_ext_ref', '(`external_system_ref_id`)');
+    await ensureIndex('consumption_records', 'idx_consumption_ticket', '(`ticket_id`)');
+    await ensureIndex('return_records', 'idx_return_ticket', '(`ticket_id`)');
+    await ensureIndex('return_records', 'idx_return_reason', '(`reason`)');
+    await ensureIndex('return_records', 'idx_return_status', '(`status`)');
+
     // Link Inward to Purchase Order
     if (!(await columnExists('inward_entries', 'po_id'))) {
       if (!silent) console.log('   Adding po_id to inward_entries...');
@@ -1157,6 +1222,7 @@ const runMigration = async (silent = false) => {
       console.log('   ✅ Created 13 new tables');
       console.log('   ✅ Added missing columns to existing tables');
       console.log('   ✅ All foreign keys and indexes created');
+      console.log('   ✅ Added search-performance indexes');
       console.log('\n🎉 Your database is now ready for the complete inventory workflow!\n');
     }
 

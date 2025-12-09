@@ -29,8 +29,7 @@ export const createConsumption = async (req, res) => {
       stockAreaId,
       fromUserId, // New: If consuming from person stock
       items, // Array of {materialId, quantity, serialNumber, remarks}
-      remarks,
-      orgId
+      remarks
     } = req.body;
 
     const userId = req.user?.id || req.user?.user_id;
@@ -38,7 +37,9 @@ export const createConsumption = async (req, res) => {
     // Validate stock area if provided
     if (stockAreaId) {
       const stockArea = await StockArea.findOne({
-        where: { area_id: stockAreaId, is_active: true }
+        where: req.withOrg
+          ? req.withOrg({ area_id: stockAreaId, is_active: true })
+          : { area_id: stockAreaId, is_active: true }
       });
 
       if (!stockArea) {
@@ -67,7 +68,7 @@ export const createConsumption = async (req, res) => {
       consumption_date: consumptionDate || new Date().toISOString().split('T')[0],
       stock_area_id: stockAreaId || null,
       remarks: remarks || null,
-      org_id: orgId || null,
+      org_id: req.orgId || null,
       created_by: userId,
       is_active: true
     }, { transaction });
@@ -79,7 +80,9 @@ export const createConsumption = async (req, res) => {
 
       // Validate material exists
       const material = await Material.findOne({
-        where: { material_id: materialId, is_active: true }
+        where: req.withOrg
+          ? req.withOrg({ material_id: materialId, is_active: true })
+          : { material_id: materialId, is_active: true }
       });
 
       if (!material) {
@@ -124,7 +127,8 @@ export const createConsumption = async (req, res) => {
         const inventoryItem = await InventoryMaster.findOne({
           where: {
             ...whereClause,
-            is_active: true
+            is_active: true,
+            ...(req.orgId ? { org_id: req.orgId } : {})
           },
           transaction
         });
@@ -165,7 +169,8 @@ export const createConsumption = async (req, res) => {
         const availableItems = await InventoryMaster.findAll({
           where: {
             ...whereClause,
-            is_active: true
+            is_active: true,
+            ...(req.orgId ? { org_id: req.orgId } : {})
           },
           limit: itemQuantity,
           transaction
@@ -245,7 +250,6 @@ export const getAllConsumptions = async (req, res) => {
       stockAreaId = '',
       dateFrom = '',
       dateTo = '',
-      orgId = '',
       showInactive = false
     } = req.query;
 
@@ -253,11 +257,7 @@ export const getAllConsumptions = async (req, res) => {
     const limitNumber = Math.max(parseInt(limit, 10) || 50, 1);
     const offset = (pageNumber - 1) * limitNumber;
 
-    const whereClause = {};
-
-    if (orgId) {
-      whereClause.org_id = orgId;
-    }
+    const whereClause = req.withOrg ? req.withOrg({}) : {};
 
     if (!showInactive || showInactive === 'false') {
       whereClause.is_active = true;
@@ -337,10 +337,15 @@ export const getConsumptionById = async (req, res) => {
     const { id } = req.params;
 
     const consumption = await ConsumptionRecord.findOne({
-      where: {
-        consumption_id: id,
-        is_active: true
-      },
+      where: req.withOrg
+        ? req.withOrg({
+          consumption_id: id,
+          is_active: true
+        })
+        : {
+          consumption_id: id,
+          is_active: true
+        },
       include: [
         {
           model: ConsumptionItem,
@@ -405,10 +410,15 @@ export const updateConsumption = async (req, res) => {
     } = req.body;
 
     const consumption = await ConsumptionRecord.findOne({
-      where: {
-        consumption_id: id,
-        is_active: true
-      }
+      where: req.withOrg
+        ? req.withOrg({
+          consumption_id: id,
+          is_active: true
+        })
+        : {
+          consumption_id: id,
+          is_active: true
+        }
     }, { transaction });
 
     if (!consumption) {
@@ -422,7 +432,9 @@ export const updateConsumption = async (req, res) => {
     // Validate stock area if provided
     if (stockAreaId && stockAreaId !== consumption.stock_area_id) {
       const stockArea = await StockArea.findOne({
-        where: { area_id: stockAreaId, is_active: true }
+        where: req.withOrg
+          ? req.withOrg({ area_id: stockAreaId, is_active: true })
+          : { area_id: stockAreaId, is_active: true }
       });
 
       if (!stockArea) {
@@ -454,7 +466,9 @@ export const updateConsumption = async (req, res) => {
         const { materialId, quantity, serialNumber, remarks: itemRemarks } = item;
 
         const material = await Material.findOne({
-          where: { material_id: materialId, is_active: true }
+          where: req.withOrg
+            ? req.withOrg({ material_id: materialId, is_active: true })
+            : { material_id: materialId, is_active: true }
         });
 
         if (!material) {
@@ -518,10 +532,15 @@ export const deleteConsumption = async (req, res) => {
     const { id } = req.params;
 
     const consumption = await ConsumptionRecord.findOne({
-      where: {
-        consumption_id: id,
-        is_active: true
-      }
+      where: req.withOrg
+        ? req.withOrg({
+          consumption_id: id,
+          is_active: true
+        })
+        : {
+          consumption_id: id,
+          is_active: true
+        }
     });
 
     if (!consumption) {

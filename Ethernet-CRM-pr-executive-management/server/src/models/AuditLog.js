@@ -70,3 +70,5 @@ const AuditLog = sequelize.define('audit_log', {
 
 export default AuditLog;
 
+
+

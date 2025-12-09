@@ -7,6 +7,7 @@ import './models/index.js';
 import routes from './routes/index.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/requestLogger.js';
+import { metricsCollector } from './middleware/metrics.js';
 
 dotenv.config();
 
@@ -34,6 +35,8 @@ if (process.env.NODE_ENV === 'development') {
 }
 // Lightweight structured-ish logger for all requests (method, path, status, duration)
 app.use(requestLogger('api'));
+// In-process metrics (counts/durations). Not suitable for multi-instance without shared store.
+app.use(metricsCollector('api'));
 
 // API routes
 app.use('/api/v1', routes);

@@ -65,3 +65,5 @@ const MaterialAllocation = sequelize.define('material_allocation', {
 export default MaterialAllocation;
 
 
+
+

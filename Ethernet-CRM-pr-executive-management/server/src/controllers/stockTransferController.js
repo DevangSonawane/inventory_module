@@ -32,15 +32,16 @@ export const createStockTransfer = async (req, res) => {
       materialRequestId,
       transferDate,
       items, // Array of {materialId, quantity, serialNumbers, remarks}
-      remarks,
-      orgId
+      remarks
     } = req.body;
 
     const userId = req.user?.id || req.user?.user_id;
 
     // Validate source stock area
     const fromStockArea = await StockArea.findOne({
-      where: { area_id: fromStockAreaId, is_active: true }
+      where: req.withOrg
+        ? req.withOrg({ area_id: fromStockAreaId, is_active: true })
+        : { area_id: fromStockAreaId, is_active: true }
     });
 
     if (!fromStockArea) {
@@ -60,7 +61,9 @@ export const createStockTransfer = async (req, res) => {
     if (toUserId) {
       // Transferring to a person (technician)
       toUser = await User.findOne({
-        where: { id: toUserId, is_active: true }
+        where: req.withOrg
+          ? req.withOrg({ id: toUserId, is_active: true })
+          : { id: toUserId, is_active: true }
       });
 
       if (!toUser) {
@@ -75,7 +78,9 @@ export const createStockTransfer = async (req, res) => {
     } else if (toStockAreaId) {
       // Transferring to another stock area
       toStockArea = await StockArea.findOne({
-        where: { area_id: toStockAreaId, is_active: true }
+        where: req.withOrg
+          ? req.withOrg({ area_id: toStockAreaId, is_active: true })
+          : { area_id: toStockAreaId, is_active: true }
       });
 
       if (!toStockArea) {
@@ -106,7 +111,9 @@ export const createStockTransfer = async (req, res) => {
     // Validate material request if provided
     if (materialRequestId) {
       const materialRequest = await MaterialRequest.findOne({
-        where: { request_id: materialRequestId, is_active: true }
+        where: req.withOrg
+          ? req.withOrg({ request_id: materialRequestId, is_active: true })
+          : { request_id: materialRequestId, is_active: true }
       });
 
       if (!materialRequest) {
@@ -134,7 +141,9 @@ export const createStockTransfer = async (req, res) => {
     
     while (!isUnique && attempts < 10) {
       const existing = await StockTransfer.findOne({
-        where: { transfer_number: transferNumber }
+        where: req.withOrg
+          ? req.withOrg({ transfer_number: transferNumber })
+          : { transfer_number: transferNumber }
       });
       if (!existing) {
         isUnique = true;
@@ -155,7 +164,7 @@ export const createStockTransfer = async (req, res) => {
       transfer_number: transferNumber,
       status: 'DRAFT',
       remarks: remarks || null,
-      org_id: orgId || null,
+      org_id: req.orgId || null,
       created_by: userId,
       updated_by: userId,
       is_active: true
@@ -168,7 +177,9 @@ export const createStockTransfer = async (req, res) => {
 
       // Validate material exists
       const material = await Material.findOne({
-        where: { material_id: materialId, is_active: true }
+        where: req.withOrg
+          ? req.withOrg({ material_id: materialId, is_active: true })
+          : { material_id: materialId, is_active: true }
       });
 
       if (!material) {
@@ -201,7 +212,8 @@ export const createStockTransfer = async (req, res) => {
               current_location_type: 'WAREHOUSE',
               location_id: fromStockAreaId,
               status: 'AVAILABLE',
-              is_active: true
+              is_active: true,
+              ...(req.orgId ? { org_id: req.orgId } : {})
             },
             transaction
           });
@@ -231,7 +243,8 @@ export const createStockTransfer = async (req, res) => {
             location_id: fromStockAreaId,
             status: 'AVAILABLE',
             serial_number: null, // Bulk items don't have serial numbers
-            is_active: true
+            is_active: true,
+            ...(req.orgId ? { org_id: req.orgId } : {})
           },
           limit: itemQuantity,
           transaction
@@ -322,7 +335,6 @@ export const getAllStockTransfers = async (req, res) => {
       status = '',
       dateFrom = '',
       dateTo = '',
-      orgId = '',
       showInactive = false
     } = req.query;
 
@@ -330,11 +342,7 @@ export const getAllStockTransfers = async (req, res) => {
     const limitNumber = Math.max(parseInt(limit, 10) || 50, 1);
     const offset = (pageNumber - 1) * limitNumber;
 
-    const whereClause = {};
-
-    if (orgId) {
-      whereClause.org_id = orgId;
-    }
+    const whereClause = req.withOrg ? req.withOrg({}) : {};
 
     if (!showInactive || showInactive === 'false') {
       whereClause.is_active = true;
@@ -423,10 +431,15 @@ export const getStockTransferById = async (req, res) => {
     const { id } = req.params;
 
     const transfer = await StockTransfer.findOne({
-      where: {
-        transfer_id: id,
-        is_active: true
-      },
+      where: req.withOrg
+        ? req.withOrg({
+          transfer_id: id,
+          is_active: true
+        })
+        : {
+          transfer_id: id,
+          is_active: true
+        },
       include: [
         {
           model: StockTransferItem,
@@ -502,10 +515,15 @@ export const updateStockTransfer = async (req, res) => {
     const userId = req.user?.id || req.user?.user_id;
 
     const transfer = await StockTransfer.findOne({
-      where: {
-        transfer_id: id,
-        is_active: true
-      }
+      where: req.withOrg
+        ? req.withOrg({
+          transfer_id: id,
+          is_active: true
+        })
+        : {
+          transfer_id: id,
+          is_active: true
+        }
     }, { transaction });
 
     if (!transfer) {
@@ -552,7 +570,9 @@ export const updateStockTransfer = async (req, res) => {
         const { materialId, quantity, serialNumbers, remarks: itemRemarks } = item;
 
         const material = await Material.findOne({
-          where: { material_id: materialId, is_active: true }
+          where: req.withOrg
+            ? req.withOrg({ material_id: materialId, is_active: true })
+            : { material_id: materialId, is_active: true }
         });
 
         if (!material) {
@@ -617,10 +637,15 @@ export const deleteStockTransfer = async (req, res) => {
     const userId = req.user?.id || req.user?.user_id;
 
     const transfer = await StockTransfer.findOne({
-      where: {
-        transfer_id: id,
-        is_active: true
-      }
+      where: req.withOrg
+        ? req.withOrg({
+          transfer_id: id,
+          is_active: true
+        })
+        : {
+          transfer_id: id,
+          is_active: true
+        }
     });
 
     if (!transfer) {

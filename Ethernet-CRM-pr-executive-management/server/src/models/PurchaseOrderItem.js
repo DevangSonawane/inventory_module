@@ -60,3 +60,5 @@ const PurchaseOrderItem = sequelize.define('purchase_order_item', {
 
 export default PurchaseOrderItem;
 
+
+

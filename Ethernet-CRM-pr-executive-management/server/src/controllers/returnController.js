@@ -30,8 +30,7 @@ export const createReturn = async (req, res) => {
       returnDate,
       reason,
       items, // Array of {materialId, inventoryMasterId, serialNumber, macId, quantity, remarks}
-      remarks,
-      orgId
+      remarks
     } = req.body;
 
     const userId = req.user?.id || req.user?.user_id;
@@ -39,7 +38,9 @@ export const createReturn = async (req, res) => {
 
     // Validate technician exists
     const technician = await User.findOne({
-      where: { id: targetTechnicianId, is_active: true },
+      where: req.withOrg
+        ? req.withOrg({ id: targetTechnicianId, is_active: true })
+        : { id: targetTechnicianId, is_active: true },
       transaction
     });
 
@@ -54,7 +55,9 @@ export const createReturn = async (req, res) => {
     // Validate consumption if provided
     if (consumptionId) {
       const consumption = await ConsumptionRecord.findOne({
-        where: { consumption_id: consumptionId, is_active: true },
+        where: req.withOrg
+          ? req.withOrg({ consumption_id: consumptionId, is_active: true })
+          : { consumption_id: consumptionId, is_active: true },
         transaction
       });
 
@@ -85,7 +88,7 @@ export const createReturn = async (req, res) => {
       reason: reason,
       remarks: remarks || null,
       status: 'PENDING',
-      org_id: orgId || null,
+      org_id: req.orgId || null,
       created_by: userId,
       updated_by: userId,
       is_active: true
@@ -98,7 +101,9 @@ export const createReturn = async (req, res) => {
 
       // Validate material exists
       const material = await Material.findOne({
-        where: { material_id: materialId, is_active: true },
+        where: req.withOrg
+          ? req.withOrg({ material_id: materialId, is_active: true })
+          : { material_id: materialId, is_active: true },
         transaction
       });
 
@@ -119,7 +124,8 @@ export const createReturn = async (req, res) => {
           current_location_type: 'PERSON',
           location_id: targetTechnicianId.toString(),
           status: { [Op.ne]: 'CONSUMED' },
-          is_active: true
+          is_active: true,
+          ...(req.orgId ? { org_id: req.orgId } : {})
         };
 
         if (inventoryMasterId) {
@@ -162,7 +168,8 @@ export const createReturn = async (req, res) => {
             location_id: targetTechnicianId.toString(),
             status: { [Op.ne]: 'CONSUMED' },
             serial_number: null, // Bulk items don't have serial numbers
-            is_active: true
+            is_active: true,
+            ...(req.orgId ? { org_id: req.orgId } : {})
           },
           limit: itemQuantity,
           transaction
@@ -258,7 +265,6 @@ export const getAllReturns = async (req, res) => {
       reason = '',
       dateFrom = '',
       dateTo = '',
-      orgId = '',
       showInactive = false
     } = req.query;
 
@@ -266,11 +272,7 @@ export const getAllReturns = async (req, res) => {
     const limitNumber = Math.max(parseInt(limit, 10) || 50, 1);
     const offset = (pageNumber - 1) * limitNumber;
 
-    const whereClause = {};
-
-    if (orgId) {
-      whereClause.org_id = orgId;
-    }
+    const whereClause = req.withOrg ? req.withOrg({}) : {};
 
     if (!showInactive || showInactive === 'false') {
       whereClause.is_active = true;
@@ -369,7 +371,9 @@ export const getReturnById = async (req, res) => {
     const { id } = req.params;
 
     const returnRecord = await ReturnRecord.findOne({
-      where: { return_id: id, is_active: true },
+      where: req.withOrg
+        ? req.withOrg({ return_id: id, is_active: true })
+        : { return_id: id, is_active: true },
       include: [
         {
           model: ReturnItem,
@@ -441,11 +445,17 @@ export const approveReturn = async (req, res) => {
 
     // Find return record
     const returnRecord = await ReturnRecord.findOne({
-      where: {
-        return_id: id,
-        status: 'PENDING',
-        is_active: true
-      },
+      where: req.withOrg
+        ? req.withOrg({
+          return_id: id,
+          status: 'PENDING',
+          is_active: true
+        })
+        : {
+          return_id: id,
+          status: 'PENDING',
+          is_active: true
+        },
       include: [
         {
           model: ReturnItem,
@@ -473,7 +483,9 @@ export const approveReturn = async (req, res) => {
     let targetStockAreaId = stockAreaId;
     if (stockAreaId) {
       const stockArea = await StockArea.findOne({
-        where: { area_id: stockAreaId, is_active: true },
+        where: req.withOrg
+          ? req.withOrg({ area_id: stockAreaId, is_active: true })
+          : { area_id: stockAreaId, is_active: true },
         transaction
       });
 
@@ -487,7 +499,7 @@ export const approveReturn = async (req, res) => {
     } else {
       // Use default stock area or first available
       const defaultStockArea = await StockArea.findOne({
-        where: { is_active: true },
+        where: req.withOrg ? req.withOrg({ is_active: true }) : { is_active: true },
         transaction
       });
 
@@ -589,11 +601,17 @@ export const rejectReturn = async (req, res) => {
 
     // Find return record
     const returnRecord = await ReturnRecord.findOne({
-      where: {
-        return_id: id,
-        status: 'PENDING',
-        is_active: true
-      },
+      where: req.withOrg
+        ? req.withOrg({
+          return_id: id,
+          status: 'PENDING',
+          is_active: true
+        })
+        : {
+          return_id: id,
+          status: 'PENDING',
+          is_active: true
+        },
       transaction
     });
 
@@ -654,7 +672,8 @@ export const getAvailableItemsForReturn = async (req, res) => {
       current_location_type: 'PERSON',
       location_id: targetTechnicianId.toString(),
       status: { [Op.in]: ['AVAILABLE', 'IN_TRANSIT'] }, // Can return available or in-transit items
-      is_active: true
+      is_active: true,
+      ...(req.orgId ? { org_id: req.orgId } : {})
     };
 
     if (ticketId) {
