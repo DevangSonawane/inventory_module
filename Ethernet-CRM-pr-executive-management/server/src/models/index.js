@@ -22,10 +22,15 @@ import PurchaseRequest from './PurchaseRequest.js';
 import PurchaseRequestItem from './PurchaseRequestItem.js';
 import PurchaseOrder from './PurchaseOrder.js';
 import PurchaseOrderItem from './PurchaseOrderItem.js';
+import Notification from './Notification.js';
+import AuditLog from './AuditLog.js';
 
 // ==================== INVENTORY MODEL ASSOCIATIONS ====================
 
 // StockArea associations
+StockArea.belongsTo(User, { foreignKey: 'store_keeper_id', as: 'storeKeeper' });
+User.hasMany(StockArea, { foreignKey: 'store_keeper_id', as: 'assignedStockAreas' });
+
 StockArea.hasMany(InwardEntry, { foreignKey: 'stock_area_id', as: 'inwardEntries' });
 InwardEntry.belongsTo(StockArea, { foreignKey: 'stock_area_id', as: 'stockArea' });
 
@@ -162,6 +167,14 @@ Material.hasMany(PurchaseOrderItem, { foreignKey: 'material_id', as: 'purchaseOr
 InwardEntry.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'purchaseOrder' });
 PurchaseOrder.hasMany(InwardEntry, { foreignKey: 'po_id', as: 'inwardEntries' });
 
+// Notification associations
+Notification.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasMany(Notification, { foreignKey: 'user_id', as: 'notifications' });
+
+// AuditLog associations
+AuditLog.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasMany(AuditLog, { foreignKey: 'user_id', as: 'auditLogs' });
+
 // Export all models
 const models = {
   User,
@@ -187,6 +200,8 @@ const models = {
   PurchaseRequestItem,
   PurchaseOrder,
   PurchaseOrderItem,
+  Notification,
+  AuditLog,
 };
 
 export default models;

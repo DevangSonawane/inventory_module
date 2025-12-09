@@ -11,6 +11,10 @@ import {
   resetPassword,
   updateProfile
 } from '../controllers/authController.js';
+import {
+  getPreferences,
+  updatePreferences
+} from '../controllers/preferencesController.js';
 import { authenticate } from '../middleware/auth.js';
 import { validate } from '../middleware/validator.js';
 
@@ -101,5 +105,7 @@ router.put('/profile', authenticate, updateProfileValidation, validate, updatePr
 router.post('/change-password', authenticate, changePasswordValidation, validate, changePassword);
 router.post('/forgot-password', forgotPasswordValidation, validate, forgotPassword);
 router.post('/reset-password', resetPasswordValidation, validate, resetPassword);
+router.get('/preferences', authenticate, getPreferences);
+router.put('/preferences', authenticate, updatePreferences);
 
 export default router;

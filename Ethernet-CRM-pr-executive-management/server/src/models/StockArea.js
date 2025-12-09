@@ -27,6 +27,11 @@ const StockArea = sequelize.define('stock_area', {
     allowNull: true,
     comment: 'Storage capacity (optional)'
   },
+  store_keeper_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'User ID assigned as Store Keeper'
+  },
   org_id: {
     type: DataTypes.UUID,
     allowNull: true,
@@ -46,6 +51,9 @@ const StockArea = sequelize.define('stock_area', {
     },
     {
       fields: ['location_code']
+    },
+    {
+      fields: ['store_keeper_id']
     },
     {
       fields: ['org_id']

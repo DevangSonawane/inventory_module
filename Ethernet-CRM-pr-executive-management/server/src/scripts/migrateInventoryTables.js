@@ -1077,12 +1077,84 @@ const runMigration = async (silent = false) => {
       if (!silent) console.log('   ℹ️  return_items table already exists');
     }
 
+    // 12. NOTIFICATIONS TABLE
+    if (!(await tableExists('notifications'))) {
+      if (!silent) console.log('   Creating notifications table...');
+      try {
+        await sequelize.query(`
+          CREATE TABLE \`notifications\` (
+            \`notification_id\` CHAR(36) NOT NULL PRIMARY KEY,
+            \`user_id\` INT NOT NULL COMMENT 'User who receives the notification',
+            \`type\` ENUM('INFO', 'WARNING', 'ALERT', 'SUCCESS') NOT NULL DEFAULT 'INFO',
+            \`title\` VARCHAR(255) NULL,
+            \`message\` TEXT NOT NULL,
+            \`entity_type\` VARCHAR(50) NULL COMMENT 'Type of entity (e.g., MaterialRequest, PurchaseOrder)',
+            \`entity_id\` VARCHAR(100) NULL COMMENT 'ID of the related entity',
+            \`is_read\` BOOLEAN NOT NULL DEFAULT FALSE,
+            \`read_at\` DATETIME NULL,
+            \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX \`idx_user_id\` (\`user_id\`),
+            INDEX \`idx_is_read\` (\`is_read\`),
+            INDEX \`idx_entity\` (\`entity_type\`, \`entity_id\`),
+            INDEX \`idx_created_at\` (\`created_at\`),
+            CONSTRAINT \`fk_notification_user\` 
+              FOREIGN KEY (\`user_id\`) REFERENCES \`users\`(\`id\`) ON DELETE CASCADE
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ notifications table created');
+      } catch (e) {
+        if (e.message && (e.message.includes('already exists') || e.message.includes('Duplicate'))) {
+          if (!silent) console.log('   ℹ️  notifications table already exists');
+        } else {
+          throw e;
+        }
+      }
+    } else {
+      if (!silent) console.log('   ℹ️  notifications table already exists');
+    }
+
+    // 13. AUDIT LOGS TABLE
+    if (!(await tableExists('audit_logs'))) {
+      if (!silent) console.log('   Creating audit_logs table...');
+      try {
+        await sequelize.query(`
+          CREATE TABLE \`audit_logs\` (
+            \`audit_id\` CHAR(36) NOT NULL PRIMARY KEY,
+            \`entity_type\` VARCHAR(50) NOT NULL COMMENT 'Type of entity (e.g., Material, InwardEntry)',
+            \`entity_id\` VARCHAR(100) NOT NULL COMMENT 'ID of the entity',
+            \`action\` ENUM('CREATE', 'UPDATE', 'DELETE', 'APPROVE', 'REJECT', 'ALLOCATE', 'TRANSFER', 'CONSUME', 'RETURN') NOT NULL,
+            \`user_id\` INT NULL COMMENT 'User who performed the action',
+            \`changes\` JSON NULL COMMENT 'Before/after values for updates',
+            \`ip_address\` VARCHAR(45) NULL,
+            \`user_agent\` TEXT NULL,
+            \`timestamp\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX \`idx_entity\` (\`entity_type\`, \`entity_id\`),
+            INDEX \`idx_user_id\` (\`user_id\`),
+            INDEX \`idx_action\` (\`action\`),
+            INDEX \`idx_timestamp\` (\`timestamp\`),
+            CONSTRAINT \`fk_audit_user\` 
+              FOREIGN KEY (\`user_id\`) REFERENCES \`users\`(\`id\`) ON DELETE SET NULL
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `, { type: QueryTypes.RAW });
+        if (!silent) console.log('   ✅ audit_logs table created');
+      } catch (e) {
+        if (e.message && (e.message.includes('already exists') || e.message.includes('Duplicate'))) {
+          if (!silent) console.log('   ℹ️  audit_logs table already exists');
+        } else {
+          throw e;
+        }
+      }
+    } else {
+      if (!silent) console.log('   ℹ️  audit_logs table already exists');
+    }
+
     if (!silent) {
       console.log('\n' + '='.repeat(60));
       console.log('✅ MIGRATION COMPLETED SUCCESSFULLY!');
       console.log('='.repeat(60));
       console.log('\n📊 Summary:');
-      console.log('   ✅ Created 11 new tables');
+      console.log('   ✅ Created 13 new tables');
       console.log('   ✅ Added missing columns to existing tables');
       console.log('   ✅ All foreign keys and indexes created');
       console.log('\n🎉 Your database is now ready for the complete inventory workflow!\n');

@@ -1,8 +1,5 @@
 import { Op } from 'sequelize';
-import InwardEntry from '../models/InwardEntry.js';
-import MaterialRequest from '../models/MaterialRequest.js';
-import StockTransfer from '../models/StockTransfer.js';
-import ConsumptionRecord from '../models/ConsumptionRecord.js';
+import AuditLog from '../models/AuditLog.js';
 import User from '../models/User.js';
 
 /**
@@ -10,226 +7,150 @@ import User from '../models/User.js';
  */
 export const getAuditLogs = async (req, res, next) => {
   try {
-    const { entityType, entityId, userId, startDate, endDate, page = 1, limit = 50 } = req.query;
+    const { entityType, entityId, userId, startDate, endDate, action, page = 1, limit = 50 } = req.query;
 
-    const offset = (page - 1) * limit;
-    const logs = [];
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
+    const whereClause = {};
 
-    // Build date filter
-    const dateFilter = startDate && endDate ? {
-      [Op.between]: [new Date(startDate), new Date(endDate)],
-    } : {};
-
-    // Get inward entry history
-    if (!entityType || entityType === 'inward') {
-      const whereClause = {
-        is_active: true,
-        ...(entityId && { inward_id: entityId }),
-        ...(userId && { created_by: userId }),
-        ...(dateFilter && { created_at: dateFilter }),
-      };
-
-      const inwards = await InwardEntry.findAll({
-        where: whereClause,
-        include: [
-          {
-            model: User,
-            as: 'creator',
-            attributes: ['id', 'name', 'email'],
-          },
-          {
-            model: User,
-            as: 'updater',
-            attributes: ['id', 'name', 'email'],
-          },
-        ],
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        order: [['created_at', 'DESC']],
-      });
-
-      logs.push(...inwards.map(item => ({
-        entityType: 'INWARD',
-        entityId: item.inward_id,
-        action: 'CREATE',
-        userId: item.created_by,
-        userName: item.creator?.name || 'Unknown',
-        timestamp: item.created_at,
-        details: {
-          slipNumber: item.slip_number,
-          invoiceNumber: item.invoice_number,
-          partyName: item.party_name,
-        },
-      })));
+    if (entityType) {
+      whereClause.entity_type = entityType;
     }
 
-    // Get material request history
-    if (!entityType || entityType === 'materialRequest') {
-      const whereClause = {
-        is_active: true,
-        ...(entityId && { request_id: entityId }),
-        ...(userId && { requested_by: userId }),
-        ...(dateFilter && { created_at: dateFilter }),
-      };
-
-      const requests = await MaterialRequest.findAll({
-        where: whereClause,
-        include: [
-          {
-            model: User,
-            as: 'requester',
-            attributes: ['id', 'name', 'email'],
-          },
-          {
-            model: User,
-            as: 'approver',
-            attributes: ['id', 'name', 'email'],
-          },
-        ],
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        order: [['created_at', 'DESC']],
-      });
-
-      logs.push(...requests.map(item => ({
-        entityType: 'MATERIAL_REQUEST',
-        entityId: item.request_id,
-        action: item.status === 'APPROVED' ? 'APPROVE' : 'CREATE',
-        userId: item.approved_by || item.requested_by,
-        userName: item.approver?.name || item.requester?.name || 'Unknown',
-        timestamp: item.approved_at || item.created_at,
-        details: {
-          slipNumber: item.slip_number,
-          status: item.status,
-        },
-      })));
+    if (entityId) {
+      whereClause.entity_id = entityId;
     }
 
-    // Get stock transfer history
-    if (!entityType || entityType === 'stockTransfer') {
-      const whereClause = {
-        is_active: true,
-        ...(entityId && { transfer_id: entityId }),
-        ...(userId && { created_by: userId }),
-        ...(dateFilter && { created_at: dateFilter }),
-      };
-
-      const transfers = await StockTransfer.findAll({
-        where: whereClause,
-        include: [
-          {
-            model: User,
-            as: 'creator',
-            attributes: ['id', 'name', 'email'],
-          },
-        ],
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        order: [['created_at', 'DESC']],
-      });
-
-      logs.push(...transfers.map(item => ({
-        entityType: 'STOCK_TRANSFER',
-        entityId: item.transfer_id,
-        action: 'CREATE',
-        userId: item.created_by,
-        userName: item.creator?.name || 'Unknown',
-        timestamp: item.created_at,
-        details: {
-          transferNumber: item.transfer_number,
-          status: item.status,
-        },
-      })));
+    if (userId) {
+      whereClause.user_id = parseInt(userId);
     }
 
-    // Sort by timestamp
-    logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    if (action) {
+      whereClause.action = action;
+    }
 
-    res.status(200).json({
+    if (startDate && endDate) {
+      whereClause.timestamp = {
+        [Op.between]: [new Date(startDate), new Date(endDate)]
+      };
+    } else if (startDate) {
+      whereClause.timestamp = {
+        [Op.gte]: new Date(startDate)
+      };
+    } else if (endDate) {
+      whereClause.timestamp = {
+        [Op.lte]: new Date(endDate)
+      };
+    }
+
+    const { count, rows: auditLogs } = await AuditLog.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'name', 'email', 'employeCode'],
+          required: false
+        }
+      ],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      order: [['timestamp', 'DESC']]
+    });
+
+    return res.status(200).json({
       success: true,
       data: {
-        logs: logs.slice(0, parseInt(limit)),
+        auditLogs,
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          totalItems: logs.length,
-          totalPages: Math.ceil(logs.length / limit),
-        },
-      },
+          totalItems: count,
+          totalPages: Math.ceil(count / parseInt(limit)),
+          currentPage: parseInt(page),
+          itemsPerPage: parseInt(limit)
+        }
+      }
     });
   } catch (error) {
-    next(error);
+    console.error('Error fetching audit logs:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch audit logs',
+      error: error.message
+    });
   }
 };
 
 /**
- * Get history for specific entity
+ * Get entity-specific history
+ * GET /api/inventory/history/:entityType/:entityId
  */
 export const getEntityHistory = async (req, res, next) => {
   try {
     const { entityType, entityId } = req.params;
+    const { page = 1, limit = 50 } = req.query;
 
-    const history = [];
+    const offset = (parseInt(page) - 1) * parseInt(limit);
 
-    if (entityType === 'inward') {
-      const inward = await InwardEntry.findByPk(entityId, {
-        include: [
-          {
-            model: User,
-            as: 'creator',
-            attributes: ['id', 'name', 'email'],
-          },
-          {
-            model: User,
-            as: 'updater',
-            attributes: ['id', 'name', 'email'],
-          },
-        ],
-      });
-
-      if (inward) {
-        history.push({
-          action: 'CREATED',
-          userId: inward.created_by,
-          userName: inward.creator?.name || 'Unknown',
-          timestamp: inward.created_at,
-          details: 'Inward entry created',
-        });
-
-        if (inward.updated_at !== inward.created_at) {
-          history.push({
-            action: 'UPDATED',
-            userId: inward.updated_by,
-            userName: inward.updater?.name || 'Unknown',
-            timestamp: inward.updated_at,
-            details: 'Inward entry updated',
-          });
+    const { count, rows: auditLogs } = await AuditLog.findAndCountAll({
+      where: {
+        entity_type: entityType,
+        entity_id: entityId,
+      },
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'name', 'email', 'employeCode'],
+          required: false
         }
-      }
-    }
+      ],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      order: [['timestamp', 'DESC']]
+    });
 
-    // Similar for other entity types...
-
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: {
         entityType,
         entityId,
-        history,
-      },
+        auditLogs,
+        pagination: {
+          totalItems: count,
+          totalPages: Math.ceil(count / parseInt(limit)),
+          currentPage: parseInt(page),
+          itemsPerPage: parseInt(limit)
+        }
+      }
     });
   } catch (error) {
-    next(error);
+    console.error('Error fetching entity history:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch entity history',
+      error: error.message
+    });
   }
 };
 
-
-
-
-
-
-
-
-
-
-
+/**
+ * Create audit log entry (helper function for other controllers)
+ */
+export const createAuditLog = async (entityType, entityId, action, userId, changes = null, ipAddress = null, userAgent = null) => {
+  try {
+    const auditLog = await AuditLog.create({
+      entity_type: entityType,
+      entity_id: entityId,
+      action,
+      user_id: userId,
+      changes,
+      ip_address: ipAddress,
+      user_agent: userAgent,
+      timestamp: new Date()
+    });
+    return auditLog;
+  } catch (error) {
+    console.error('Error creating audit log:', error);
+    return null;
+  }
+};

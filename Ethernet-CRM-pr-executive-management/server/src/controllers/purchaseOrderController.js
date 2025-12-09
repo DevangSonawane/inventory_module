@@ -721,3 +721,151 @@ export const deletePurchaseOrder = async (req, res) => {
   }
 };
 
+/**
+ * Mark Purchase Order as SENT (when email/PO is sent to vendor)
+ * POST /api/inventory/purchase-orders/:id/send
+ */
+export const sendPurchaseOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const purchaseOrder = await PurchaseOrder.findOne({
+      where: {
+        po_id: id,
+        is_active: true
+      }
+    });
+
+    if (!purchaseOrder) {
+      return res.status(404).json({
+        success: false,
+        message: 'Purchase order not found'
+      });
+    }
+
+    // Only allow sending if status is DRAFT
+    if (purchaseOrder.status !== 'DRAFT') {
+      return res.status(400).json({
+        success: false,
+        message: `Purchase order is already ${purchaseOrder.status}. Only DRAFT orders can be sent.`
+      });
+    }
+
+    await purchaseOrder.update({
+      status: 'SENT'
+    });
+
+    const updatedPO = await PurchaseOrder.findOne({
+      where: { po_id: id },
+      include: [
+        {
+          model: PurchaseOrderItem,
+          as: 'items',
+          include: [
+            {
+              model: Material,
+              as: 'material'
+            }
+          ]
+        },
+        {
+          model: BusinessPartner,
+          as: 'vendor'
+        },
+        {
+          model: PurchaseRequest,
+          as: 'purchaseRequest',
+          required: false
+        }
+      ]
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Purchase order marked as SENT',
+      data: updatedPO
+    });
+  } catch (error) {
+    console.error('Error sending purchase order:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to send purchase order',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Mark Purchase Order as RECEIVED (when goods are received)
+ * POST /api/inventory/purchase-orders/:id/receive
+ */
+export const receivePurchaseOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const purchaseOrder = await PurchaseOrder.findOne({
+      where: {
+        po_id: id,
+        is_active: true
+      }
+    });
+
+    if (!purchaseOrder) {
+      return res.status(404).json({
+        success: false,
+        message: 'Purchase order not found'
+      });
+    }
+
+    // Only allow receiving if status is SENT
+    if (purchaseOrder.status !== 'SENT') {
+      return res.status(400).json({
+        success: false,
+        message: `Purchase order status is ${purchaseOrder.status}. Only SENT orders can be marked as RECEIVED.`
+      });
+    }
+
+    await purchaseOrder.update({
+      status: 'RECEIVED'
+    });
+
+    const updatedPO = await PurchaseOrder.findOne({
+      where: { po_id: id },
+      include: [
+        {
+          model: PurchaseOrderItem,
+          as: 'items',
+          include: [
+            {
+              model: Material,
+              as: 'material'
+            }
+          ]
+        },
+        {
+          model: BusinessPartner,
+          as: 'vendor'
+        },
+        {
+          model: PurchaseRequest,
+          as: 'purchaseRequest',
+          required: false
+        }
+      ]
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Purchase order marked as RECEIVED',
+      data: updatedPO
+    });
+  } catch (error) {
+    console.error('Error receiving purchase order:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to mark purchase order as received',
+      error: error.message
+    });
+  }
+};
+

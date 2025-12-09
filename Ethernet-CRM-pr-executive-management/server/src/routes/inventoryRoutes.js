@@ -34,7 +34,8 @@ import {
   getAllInwards,
   getInwardById,
   updateInward,
-  deleteInward
+  deleteInward,
+  markInwardAsCompleted
 } from '../controllers/inwardController.js';
 import {
   createMaterialRequest,
@@ -112,7 +113,10 @@ import {
 import {
   exportMaterials,
   exportInward,
-  exportStockLevels
+  exportStockLevels,
+  exportStockMovement,
+  exportConsumptionAnalysis,
+  exportStockValuation
 } from '../controllers/exportController.js';
 import {
   validateProductCode,
@@ -141,7 +145,9 @@ import {
   createPOFromPR,
   createPurchaseOrder,
   updatePurchaseOrder,
-  deletePurchaseOrder
+  deletePurchaseOrder,
+  sendPurchaseOrder,
+  receivePurchaseOrder
 } from '../controllers/purchaseOrderController.js';
 import { uploadInwardDocuments } from '../middleware/upload.js';
 
@@ -498,6 +504,10 @@ router.post(
       .notEmpty()
       .withMessage('Area name is required')
       .trim(),
+    body('storeKeeperId')
+      .optional()
+      .isInt()
+      .withMessage('Invalid store keeper ID'),
     body('orgId')
       .optional()
       .isUUID()
@@ -636,6 +646,13 @@ router.put(
   validate,
   updateInward
 );
+
+/**
+ * @route   PUT /api/inventory/inward/:id/complete
+ * @desc    Mark inward entry as completed
+ * @access  Private
+ */
+router.put('/inward/:id/complete', markInwardAsCompleted);
 
 /**
  * @route   DELETE /api/inventory/inward/:id
@@ -1346,6 +1363,27 @@ router.get('/export/inward', exportInward);
  */
 router.get('/export/stock-levels', exportStockLevels);
 
+/**
+ * @route   GET /api/inventory/export/stock-movement
+ * @desc    Export stock movement report to CSV/JSON
+ * @access  Private
+ */
+router.get('/export/stock-movement', exportStockMovement);
+
+/**
+ * @route   GET /api/inventory/export/consumption-analysis
+ * @desc    Export consumption analysis report to CSV/JSON
+ * @access  Private
+ */
+router.get('/export/consumption-analysis', exportConsumptionAnalysis);
+
+/**
+ * @route   GET /api/inventory/export/stock-valuation
+ * @desc    Export stock valuation report to CSV/JSON
+ * @access  Private
+ */
+router.get('/export/stock-valuation', exportStockValuation);
+
 // ==================== BUSINESS PARTNERS ROUTES ====================
 
 /**
@@ -1743,6 +1781,40 @@ router.put(
   ],
   validate,
   updatePurchaseOrder
+);
+
+/**
+ * @route   POST /api/inventory/purchase-orders/:id/send
+ * @desc    Mark purchase order as SENT
+ * @access  Private
+ * @note    This route must come before /purchase-orders/:id to avoid route conflicts
+ */
+router.post(
+  '/purchase-orders/:id/send',
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid purchase order ID')
+  ],
+  validate,
+  sendPurchaseOrder
+);
+
+/**
+ * @route   POST /api/inventory/purchase-orders/:id/receive
+ * @desc    Mark purchase order as RECEIVED
+ * @access  Private
+ * @note    This route must come before /purchase-orders/:id to avoid route conflicts
+ */
+router.post(
+  '/purchase-orders/:id/receive',
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid purchase order ID')
+  ],
+  validate,
+  receivePurchaseOrder
 );
 
 /**

@@ -78,7 +78,7 @@ export const createInward = async (req, res) => {
       }
     }
 
-    // Create inward entry
+    // Create inward entry with DRAFT status by default
     const inwardEntry = await InwardEntry.create({
       date: date || new Date().toISOString().split('T')[0],
       invoice_number: invoiceNumber,
@@ -88,7 +88,7 @@ export const createInward = async (req, res) => {
       stock_area_id: stockAreaId,
       vehicle_number: vehicleNumber || null,
       slip_number: slipNumber,
-      status: 'COMPLETED',
+      status: 'DRAFT', // Start as DRAFT, will be marked COMPLETED after verification
       remark: remark || null,
       documents: documents || null,
       org_id: req.body.orgId || null,
@@ -128,50 +128,9 @@ export const createInward = async (req, res) => {
 
       createdItems.push(inwardItem);
 
-      // Create inventory_master records
-      // For serialized items: one record per serial number
-      // For bulk items: one record per unit (quantity)
-      if (serialNumber) {
-        // Serialized item - create one record with serial number
-        // Check if serial already exists
-        const existingSerial = await InventoryMaster.findOne({
-          where: { serial_number: serialNumber },
-          transaction
-        });
-
-        if (existingSerial) {
-          await transaction.rollback();
-          return res.status(400).json({
-            success: false,
-            message: `Serial number ${serialNumber} already exists in inventory`
-          });
-        }
-
-        await InventoryMaster.create({
-          material_id: materialId,
-          serial_number: serialNumber,
-          mac_id: macId || null,
-          current_location_type: 'WAREHOUSE',
-          location_id: stockAreaId,
-          status: 'AVAILABLE',
-          inward_item_id: inwardItem.item_id,
-          org_id: req.body.orgId || null
-        }, { transaction });
-      } else {
-        // Bulk item - create one record per unit
-        for (let i = 0; i < itemQuantity; i++) {
-          await InventoryMaster.create({
-            material_id: materialId,
-            serial_number: null,
-            mac_id: null,
-            current_location_type: 'WAREHOUSE',
-            location_id: stockAreaId,
-            status: 'AVAILABLE',
-            inward_item_id: inwardItem.item_id,
-            org_id: req.body.orgId || null
-          }, { transaction });
-        }
-      }
+      // Note: Inventory records are NOT created here for DRAFT entries
+      // They will be created when the entry is marked as COMPLETED
+      // This ensures inventory is only updated after verification
     }
 
     await transaction.commit();
@@ -557,6 +516,187 @@ export const deleteInward = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to delete inward entry',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Mark inward entry as completed
+ * PUT /api/inventory/inward/:id/complete
+ * Business Logic:
+ * - Entry must be in DRAFT status
+ * - Must have at least one item
+ * - All items must have valid materials
+ * - Inventory must be updated successfully
+ */
+export const markInwardAsCompleted = async (req, res) => {
+  const transaction = await sequelize.transaction();
+  
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id || req.user?.user_id;
+
+    // Find inward entry
+    const inward = await InwardEntry.findOne({
+      where: {
+        inward_id: id,
+        is_active: true
+      },
+      include: [
+        {
+          model: InwardItem,
+          as: 'items',
+          include: [
+            {
+              model: Material,
+              as: 'material'
+            }
+          ]
+        }
+      ],
+      transaction
+    });
+
+    if (!inward) {
+      await transaction.rollback();
+      return res.status(404).json({
+        success: false,
+        message: 'Inward entry not found'
+      });
+    }
+
+    // Check if already completed
+    if (inward.status === 'COMPLETED') {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Inward entry is already completed'
+      });
+    }
+
+    // Check if cancelled
+    if (inward.status === 'CANCELLED') {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot complete a cancelled inward entry'
+      });
+    }
+
+    // Business logic validation: Must have at least one item
+    if (!inward.items || inward.items.length === 0) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot complete inward entry without items'
+      });
+    }
+
+    // Validate all items have valid materials
+    for (const item of inward.items) {
+      if (!item.material || !item.material.is_active) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: `Item with material ${item.material_id} is invalid or inactive`
+        });
+      }
+    }
+
+    // Update inventory master for all items (if not already done)
+    // This ensures stock is properly recorded when marking as completed
+    for (const item of inward.items) {
+      const itemQuantity = parseInt(item.quantity) || 1;
+      
+      // If serialized item, create individual records
+      if (item.serial_number) {
+        // Check if serial already exists
+        const existingSerial = await InventoryMaster.findOne({
+          where: { 
+            serial_number: item.serial_number,
+            is_active: true
+          },
+          transaction
+        });
+
+        if (existingSerial) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: `Serial number ${item.serial_number} already exists in inventory`
+          });
+        }
+
+        // Check if inventory record already exists for this inward item
+        const existingInventory = await InventoryMaster.findOne({
+          where: {
+            inward_item_id: item.item_id,
+            is_active: true
+          },
+          transaction
+        });
+
+        if (!existingInventory) {
+          await InventoryMaster.create({
+            material_id: item.material_id,
+            serial_number: item.serial_number,
+            mac_id: item.mac_id || null,
+            current_location_type: 'WAREHOUSE',
+            location_id: inward.stock_area_id,
+            status: 'AVAILABLE',
+            inward_item_id: item.item_id,
+            org_id: inward.org_id || null
+          }, { transaction });
+        }
+      } else {
+        // Non-serialized item - check if inventory records exist
+        const existingCount = await InventoryMaster.count({
+          where: {
+            inward_item_id: item.item_id,
+            is_active: true
+          },
+          transaction
+        });
+
+        // Create missing records (one per unit)
+        const recordsToCreate = itemQuantity - existingCount;
+        if (recordsToCreate > 0) {
+          for (let i = 0; i < recordsToCreate; i++) {
+            await InventoryMaster.create({
+              material_id: item.material_id,
+              serial_number: null,
+              mac_id: null,
+              current_location_type: 'WAREHOUSE',
+              location_id: inward.stock_area_id,
+              status: 'AVAILABLE',
+              inward_item_id: item.item_id,
+              org_id: inward.org_id || null
+            }, { transaction });
+          }
+        }
+      }
+    }
+
+    // Update status to COMPLETED
+    await inward.update({
+      status: 'COMPLETED',
+      updated_by: userId
+    }, { transaction });
+
+    await transaction.commit();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Inward entry marked as completed successfully',
+      data: inward
+    });
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Error marking inward as completed:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to mark inward entry as completed',
       error: error.message
     });
   }

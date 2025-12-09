@@ -1,36 +1,47 @@
 import { Op } from 'sequelize';
-import User from '../models/User.js';
-
-// Simple in-memory notification store (in production, use a database table)
-// For now, we'll return empty array - can be enhanced with a Notification model later
-const notifications = [];
+import Notification from '../models/Notification.js';
 
 /**
  * Get user notifications
  */
 export const getNotifications = async (req, res, next) => {
   try {
-    const { userId } = req.user;
+    const userId = req.user?.id || req.user?.user_id;
     const { read, limit = 50 } = req.query;
 
-    // Filter notifications for user
-    let userNotifications = notifications.filter(n => n.userId === userId);
-
-    if (read !== undefined) {
-      userNotifications = userNotifications.filter(n => n.read === (read === 'true'));
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID is required'
+      });
     }
 
-    // Sort by timestamp descending
-    userNotifications.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const whereClause = {
+      user_id: userId
+    };
 
-    // Limit results
-    userNotifications = userNotifications.slice(0, parseInt(limit));
+    if (read !== undefined) {
+      whereClause.is_read = read === 'true';
+    }
+
+    const notifications = await Notification.findAll({
+      where: whereClause,
+      limit: parseInt(limit),
+      order: [['created_at', 'DESC']]
+    });
+
+    const unreadCount = await Notification.count({
+      where: {
+        user_id: userId,
+        is_read: false
+      }
+    });
 
     res.status(200).json({
       success: true,
       data: {
-        notifications: userNotifications,
-        unreadCount: notifications.filter(n => n.userId === userId && !n.read).length,
+        notifications,
+        unreadCount,
       },
     });
   } catch (error) {
@@ -44,9 +55,21 @@ export const getNotifications = async (req, res, next) => {
 export const markNotificationRead = async (req, res, next) => {
   try {
     const { notificationId } = req.params;
-    const { userId } = req.user;
+    const userId = req.user?.id || req.user?.user_id;
 
-    const notification = notifications.find(n => n.id === notificationId && n.userId === userId);
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID is required'
+      });
+    }
+
+    const notification = await Notification.findOne({
+      where: {
+        notification_id: notificationId,
+        user_id: userId
+      }
+    });
 
     if (!notification) {
       return res.status(404).json({
@@ -55,8 +78,10 @@ export const markNotificationRead = async (req, res, next) => {
       });
     }
 
-    notification.read = true;
-    notification.readAt = new Date();
+    await notification.update({
+      is_read: true,
+      read_at: new Date()
+    });
 
     res.status(200).json({
       success: true,
@@ -74,18 +99,30 @@ export const markNotificationRead = async (req, res, next) => {
 export const deleteNotification = async (req, res, next) => {
   try {
     const { notificationId } = req.params;
-    const { userId } = req.user;
+    const userId = req.user?.id || req.user?.user_id;
 
-    const index = notifications.findIndex(n => n.id === notificationId && n.userId === userId);
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID is required'
+      });
+    }
 
-    if (index === -1) {
+    const notification = await Notification.findOne({
+      where: {
+        notification_id: notificationId,
+        user_id: userId
+      }
+    });
+
+    if (!notification) {
       return res.status(404).json({
         success: false,
         message: 'Notification not found',
       });
     }
 
-    notifications.splice(index, 1);
+    await notification.destroy();
 
     res.status(200).json({
       success: true,
@@ -93,6 +130,27 @@ export const deleteNotification = async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+};
+
+/**
+ * Create notification (helper function for other controllers)
+ */
+export const createNotification = async (userId, type, message, title = null, entityType = null, entityId = null) => {
+  try {
+    const notification = await Notification.create({
+      user_id: userId,
+      type,
+      title,
+      message,
+      entity_type: entityType,
+      entity_id: entityId,
+      is_read: false
+    });
+    return notification;
+  } catch (error) {
+    console.error('Error creating notification:', error);
+    return null;
   }
 };
 

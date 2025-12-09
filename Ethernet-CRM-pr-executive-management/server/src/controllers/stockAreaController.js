@@ -1,4 +1,5 @@
 import StockArea from '../models/StockArea.js';
+import User from '../models/User.js';
 import { validationResult } from 'express-validator';
 import { Op } from 'sequelize';
 
@@ -46,6 +47,14 @@ export const getAllStockAreas = async (req, res) => {
       offset: offset,
       order: [['area_name', 'ASC']],
       distinct: true,
+      include: [
+        {
+          model: User,
+          as: 'storeKeeper',
+          attributes: ['id', 'name', 'employeCode', 'email'],
+          required: false
+        }
+      ]
     });
 
     const totalStockAreas = typeof count === 'number' ? count : 0;
@@ -119,13 +128,14 @@ export const createStockArea = async (req, res) => {
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
-    const { areaName, locationCode, address, capacity, orgId } = req.body;
+    const { areaName, locationCode, address, capacity, storeKeeperId, orgId } = req.body;
 
     const stockArea = await StockArea.create({
       area_name: areaName,
       location_code: locationCode || null,
       address: address || null,
       capacity: capacity || null,
+      store_keeper_id: storeKeeperId || null,
       org_id: orgId || null,
       is_active: true
     });
@@ -157,7 +167,7 @@ export const updateStockArea = async (req, res) => {
     }
 
     const { id } = req.params;
-    const { areaName, locationCode, address, capacity } = req.body;
+    const { areaName, locationCode, address, capacity, storeKeeperId } = req.body;
 
     const stockArea = await StockArea.findOne({
       where: {
@@ -177,7 +187,8 @@ export const updateStockArea = async (req, res) => {
       area_name: areaName || stockArea.area_name,
       location_code: locationCode !== undefined ? locationCode : stockArea.location_code,
       address: address !== undefined ? address : stockArea.address,
-      capacity: capacity !== undefined ? capacity : stockArea.capacity
+      capacity: capacity !== undefined ? capacity : stockArea.capacity,
+      store_keeper_id: storeKeeperId !== undefined ? storeKeeperId : stockArea.store_keeper_id
     });
 
     return res.status(200).json({
