@@ -29,18 +29,11 @@ export const getAllPurchaseOrders = async (req, res) => {
       limit = 50,
       search = '',
       status = '',
-      vendorId = '',
-      orgId
+      vendorId = ''
     } = req.query;
 
     const offset = (parseInt(page) - 1) * parseInt(limit);
-    const where = {
-      is_active: true
-    };
-
-    if (orgId) {
-      where.org_id = orgId;
-    }
+    const where = req.withOrg ? req.withOrg({ is_active: true }) : { is_active: true };
 
     if (status) {
       where.status = status;
@@ -108,7 +101,9 @@ export const getPurchaseOrderById = async (req, res) => {
     const { id } = req.params;
 
     const purchaseOrder = await PurchaseOrder.findOne({
-      where: { po_id: id, is_active: true },
+      where: req.withOrg
+        ? req.withOrg({ po_id: id, is_active: true })
+        : { po_id: id, is_active: true },
       include: [
         {
           model: PurchaseOrderItem,
@@ -441,7 +436,7 @@ export const createPurchaseOrder = async (req, res) => {
       status: 'DRAFT',
       total_amount: 0,
       remarks: remarks || null,
-      org_id: orgId || null,
+      org_id: req.orgId || orgId || null,
       is_active: true
     }, { transaction });
 
@@ -551,7 +546,9 @@ export const updatePurchaseOrder = async (req, res) => {
     } = req.body;
 
     const purchaseOrder = await PurchaseOrder.findOne({
-      where: { po_id: id, is_active: true }
+      where: req.withOrg
+        ? req.withOrg({ po_id: id, is_active: true })
+        : { po_id: id, is_active: true }
     });
 
     if (!purchaseOrder) {
@@ -687,7 +684,9 @@ export const deletePurchaseOrder = async (req, res) => {
     const { id } = req.params;
 
     const purchaseOrder = await PurchaseOrder.findOne({
-      where: { po_id: id, is_active: true }
+      where: req.withOrg
+        ? req.withOrg({ po_id: id, is_active: true })
+        : { po_id: id, is_active: true }
     });
 
     if (!purchaseOrder) {
