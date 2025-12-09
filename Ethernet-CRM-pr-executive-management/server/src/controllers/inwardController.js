@@ -714,10 +714,31 @@ export const markInwardAsCompleted = async (req, res) => {
 
     await transaction.commit();
 
+    // Fetch updated inward with all relations
+    const updatedInward = await InwardEntry.findOne({
+      where: { inward_id: id },
+      include: [
+        {
+          model: InwardItem,
+          as: 'items',
+          include: [
+            {
+              model: Material,
+              as: 'material'
+            }
+          ]
+        },
+        {
+          model: StockArea,
+          as: 'stockArea'
+        }
+      ]
+    });
+
     return res.status(200).json({
       success: true,
       message: 'Inward entry marked as completed successfully',
-      data: inward
+      data: { inward: updatedInward }
     });
   } catch (error) {
     await transaction.rollback();

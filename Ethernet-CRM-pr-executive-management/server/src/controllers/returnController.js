@@ -573,7 +573,7 @@ export const approveReturn = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Return approved and items transferred to warehouse',
-      data: updatedReturn
+      data: { returnRecord: updatedReturn }
     });
   } catch (error) {
     await transaction.rollback();
@@ -634,10 +634,37 @@ export const rejectReturn = async (req, res) => {
 
     await transaction.commit();
 
+    // Fetch updated return record
+    const updatedReturn = await ReturnRecord.findOne({
+      where: { return_id: id },
+      include: [
+        {
+          model: ReturnItem,
+          as: 'items',
+          include: [
+            {
+              model: Material,
+              as: 'material'
+            }
+          ]
+        },
+        {
+          model: User,
+          as: 'technician',
+          attributes: ['id', 'name', 'email']
+        },
+        {
+          model: User,
+          as: 'approver',
+          attributes: ['id', 'name', 'email']
+        }
+      ]
+    });
+
     return res.status(200).json({
       success: true,
       message: 'Return rejected',
-      data: returnRecord
+      data: { returnRecord: updatedReturn }
     });
   } catch (error) {
     await transaction.rollback();

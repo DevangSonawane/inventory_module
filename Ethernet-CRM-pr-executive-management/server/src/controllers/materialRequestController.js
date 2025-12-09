@@ -257,7 +257,7 @@ export const getMaterialRequestById = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      data: request
+      data: { materialRequest: request }
     });
   } catch (error) {
     console.error('Error fetching material request:', error);
@@ -494,7 +494,7 @@ export const approveMaterialRequest = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: `Material request ${status.toLowerCase()} successfully`,
-      data: updatedRequest
+      data: { materialRequest: updatedRequest }
     });
   } catch (error) {
     await transaction.rollback();

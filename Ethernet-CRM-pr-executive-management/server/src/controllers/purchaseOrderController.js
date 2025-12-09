@@ -729,10 +729,9 @@ export const sendPurchaseOrder = async (req, res) => {
     const { id } = req.params;
 
     const purchaseOrder = await PurchaseOrder.findOne({
-      where: {
-        po_id: id,
-        is_active: true
-      }
+      where: req.withOrg
+        ? req.withOrg({ po_id: id, is_active: true })
+        : { po_id: id, is_active: true }
     });
 
     if (!purchaseOrder) {
@@ -782,7 +781,7 @@ export const sendPurchaseOrder = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Purchase order marked as SENT',
-      data: updatedPO
+      data: { purchaseOrder: updatedPO }
     });
   } catch (error) {
     console.error('Error sending purchase order:', error);
@@ -803,10 +802,9 @@ export const receivePurchaseOrder = async (req, res) => {
     const { id } = req.params;
 
     const purchaseOrder = await PurchaseOrder.findOne({
-      where: {
-        po_id: id,
-        is_active: true
-      }
+      where: req.withOrg
+        ? req.withOrg({ po_id: id, is_active: true })
+        : { po_id: id, is_active: true }
     });
 
     if (!purchaseOrder) {
@@ -856,7 +854,7 @@ export const receivePurchaseOrder = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Purchase order marked as RECEIVED',
-      data: updatedPO
+      data: { purchaseOrder: updatedPO }
     });
   } catch (error) {
     console.error('Error receiving purchase order:', error);

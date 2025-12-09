@@ -523,7 +523,9 @@ export const rejectPurchaseRequest = async (req, res) => {
     }
 
     const purchaseRequest = await PurchaseRequest.findOne({
-      where: { pr_id: id, is_active: true }
+      where: req.withOrg
+        ? req.withOrg({ pr_id: id, is_active: true })
+        : { pr_id: id, is_active: true }
     });
 
     if (!purchaseRequest) {

@@ -5,6 +5,7 @@ import { authenticate } from '../middleware/auth.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 import { requestLogger } from '../middleware/requestLogger.js';
 import { orgContext } from '../middleware/orgContext.js';
+import { roleGuard } from '../middleware/roleGuard.js';
 import {
   addStock,
   getAllAssets,
@@ -458,7 +459,7 @@ router.put(
 /**
  * @route   DELETE /api/inventory/materials/:id
  * @desc    Delete material (soft delete)
- * @access  Private
+ * @access  Private (Admin only)
  */
 router.delete(
   '/materials/:id',
@@ -468,6 +469,7 @@ router.delete(
       .withMessage('Invalid material ID')
   ],
   validate,
+  roleGuard('admin'),
   deleteMaterial
 );
 
@@ -545,7 +547,7 @@ router.put(
 /**
  * @route   DELETE /api/inventory/stock-areas/:id
  * @desc    Delete stock area (soft delete)
- * @access  Private
+ * @access  Private (Admin only)
  */
 router.delete(
   '/stock-areas/:id',
@@ -555,6 +557,7 @@ router.delete(
       .withMessage('Invalid stock area ID')
   ],
   validate,
+  roleGuard('admin'),
   deleteStockArea
 );
 
@@ -654,14 +657,14 @@ router.put(
 /**
  * @route   PUT /api/inventory/inward/:id/complete
  * @desc    Mark inward entry as completed
- * @access  Private
+ * @access  Private (Admin only)
  */
-router.put('/inward/:id/complete', markInwardAsCompleted);
+router.put('/inward/:id/complete', roleGuard('admin'), markInwardAsCompleted);
 
 /**
  * @route   DELETE /api/inventory/inward/:id
  * @desc    Delete inward entry (soft delete)
- * @access  Private
+ * @access  Private (Admin only)
  */
 router.delete(
   '/inward/:id',
@@ -671,6 +674,7 @@ router.delete(
       .withMessage('Invalid inward ID')
   ],
   validate,
+  roleGuard('admin'),
   deleteInward
 );
 
@@ -765,6 +769,7 @@ router.post(
       .withMessage('Approved items must be an array'),
   ],
   validate,
+  roleGuard('admin'),
   approveMaterialRequest
 );
 
@@ -848,7 +853,7 @@ router.delete(
 /**
  * @route   DELETE /api/inventory/material-request/:id
  * @desc    Delete material request (soft delete)
- * @access  Private
+ * @access  Private (Admin only)
  */
 router.delete(
   '/material-request/:id',
@@ -858,6 +863,7 @@ router.delete(
       .withMessage('Invalid material request ID')
   ],
   validate,
+  roleGuard('admin'),
   deleteMaterialRequest
 );
 
@@ -948,7 +954,7 @@ router.put(
 /**
  * @route   DELETE /api/inventory/stock-transfer/:id
  * @desc    Delete stock transfer (soft delete)
- * @access  Private
+ * @access  Private (Admin only)
  */
 router.delete(
   '/stock-transfer/:id',
@@ -958,6 +964,7 @@ router.delete(
       .withMessage('Invalid stock transfer ID')
   ],
   validate,
+  roleGuard('admin'),
   deleteStockTransfer
 );
 
@@ -1040,7 +1047,7 @@ router.put(
 /**
  * @route   DELETE /api/inventory/consumption/:id
  * @desc    Delete consumption record (soft delete)
- * @access  Private
+ * @access  Private (Admin only)
  */
 router.delete(
   '/consumption/:id',
@@ -1050,6 +1057,7 @@ router.delete(
       .withMessage('Invalid consumption ID')
   ],
   validate,
+  roleGuard('admin'),
   deleteConsumption
 );
 
@@ -1155,7 +1163,7 @@ router.get(
 /**
  * @route   PUT /api/inventory/returns/:id/approve
  * @desc    Approve return and transfer items to warehouse
- * @access  Private
+ * @access  Private (Admin only)
  */
 router.put(
   '/returns/:id/approve',
@@ -1169,13 +1177,14 @@ router.put(
       .withMessage('Invalid stock area ID'),
   ],
   validate,
+  roleGuard('admin'),
   approveReturn
 );
 
 /**
  * @route   PUT /api/inventory/returns/:id/reject
  * @desc    Reject return record
- * @access  Private
+ * @access  Private (Admin only)
  */
 router.put(
   '/returns/:id/reject',
@@ -1185,6 +1194,7 @@ router.put(
       .withMessage('Invalid return ID'),
   ],
   validate,
+  roleGuard('admin'),
   rejectReturn
 );
 
@@ -1338,60 +1348,60 @@ router.get(
 /**
  * @route   POST /api/inventory/bulk/materials
  * @desc    Bulk create/update materials
- * @access  Private
+ * @access  Private (Admin only)
  */
-router.post('/bulk/materials', bulkMaterials);
+router.post('/bulk/materials', roleGuard('admin'), bulkMaterials);
 
 /**
  * @route   POST /api/inventory/bulk/inward
  * @desc    Bulk create inward entries
- * @access  Private
+ * @access  Private (Admin only)
  */
-router.post('/bulk/inward', bulkInward);
+router.post('/bulk/inward', roleGuard('admin'), bulkInward);
 
 // ==================== EXPORT ROUTES ====================
 
 /**
  * @route   GET /api/inventory/export/materials
  * @desc    Export materials to CSV/JSON
- * @access  Private
+ * @access  Private (Admin only)
  */
-router.get('/export/materials', exportMaterials);
+router.get('/export/materials', roleGuard('admin'), exportMaterials);
 
 /**
  * @route   GET /api/inventory/export/inward
  * @desc    Export inward entries to CSV/JSON
- * @access  Private
+ * @access  Private (Admin only)
  */
-router.get('/export/inward', exportInward);
+router.get('/export/inward', roleGuard('admin'), exportInward);
 
 /**
  * @route   GET /api/inventory/export/stock-levels
  * @desc    Export stock levels to CSV/JSON
- * @access  Private
+ * @access  Private (Admin only)
  */
-router.get('/export/stock-levels', exportStockLevels);
+router.get('/export/stock-levels', roleGuard('admin'), exportStockLevels);
 
 /**
  * @route   GET /api/inventory/export/stock-movement
  * @desc    Export stock movement report to CSV/JSON
- * @access  Private
+ * @access  Private (Admin only)
  */
-router.get('/export/stock-movement', exportStockMovement);
+router.get('/export/stock-movement', roleGuard('admin'), exportStockMovement);
 
 /**
  * @route   GET /api/inventory/export/consumption-analysis
  * @desc    Export consumption analysis report to CSV/JSON
- * @access  Private
+ * @access  Private (Admin only)
  */
-router.get('/export/consumption-analysis', exportConsumptionAnalysis);
+router.get('/export/consumption-analysis', roleGuard('admin'), exportConsumptionAnalysis);
 
 /**
  * @route   GET /api/inventory/export/stock-valuation
  * @desc    Export stock valuation report to CSV/JSON
- * @access  Private
+ * @access  Private (Admin only)
  */
-router.get('/export/stock-valuation', exportStockValuation);
+router.get('/export/stock-valuation', roleGuard('admin'), exportStockValuation);
 
 // ==================== BUSINESS PARTNERS ROUTES ====================
 
@@ -1485,7 +1495,7 @@ router.put(
 /**
  * @route   DELETE /api/inventory/business-partners/:id
  * @desc    Delete business partner (soft delete)
- * @access  Private
+ * @access  Private (Admin only)
  */
 router.delete(
   '/business-partners/:id',
@@ -1496,6 +1506,7 @@ router.delete(
       .withMessage('Invalid business partner ID')
   ],
   validate,
+  roleGuard('admin'),
   deleteBusinessPartner
 );
 
@@ -1605,7 +1616,7 @@ router.put(
 /**
  * @route   PUT /api/inventory/purchase-requests/:id/approve
  * @desc    Approve purchase request
- * @access  Private
+ * @access  Private (Admin only)
  */
 router.put(
   '/purchase-requests/:id/approve',
@@ -1616,13 +1627,14 @@ router.put(
       .withMessage('Invalid purchase request ID')
   ],
   validate,
+  roleGuard('admin'),
   approvePurchaseRequest
 );
 
 /**
  * @route   PUT /api/inventory/purchase-requests/:id/reject
  * @desc    Reject purchase request
- * @access  Private
+ * @access  Private (Admin only)
  */
 router.put(
   '/purchase-requests/:id/reject',
@@ -1637,13 +1649,14 @@ router.put(
       .withMessage('Rejection remarks are required')
   ],
   validate,
+  roleGuard('admin'),
   rejectPurchaseRequest
 );
 
 /**
  * @route   DELETE /api/inventory/purchase-requests/:id
  * @desc    Delete purchase request (soft delete)
- * @access  Private
+ * @access  Private (Admin only)
  */
 router.delete(
   '/purchase-requests/:id',
@@ -1654,6 +1667,7 @@ router.delete(
       .withMessage('Invalid purchase request ID')
   ],
   validate,
+  roleGuard('admin'),
   deletePurchaseRequest
 );
 
@@ -1795,7 +1809,7 @@ router.put(
 /**
  * @route   POST /api/inventory/purchase-orders/:id/send
  * @desc    Mark purchase order as SENT
- * @access  Private
+ * @access  Private (Admin only)
  * @note    This route must come before /purchase-orders/:id to avoid route conflicts
  */
 router.post(
@@ -1806,13 +1820,14 @@ router.post(
       .withMessage('Invalid purchase order ID')
   ],
   validate,
+  roleGuard('admin'),
   sendPurchaseOrder
 );
 
 /**
  * @route   POST /api/inventory/purchase-orders/:id/receive
  * @desc    Mark purchase order as RECEIVED
- * @access  Private
+ * @access  Private (Admin only)
  * @note    This route must come before /purchase-orders/:id to avoid route conflicts
  */
 router.post(
@@ -1823,13 +1838,14 @@ router.post(
       .withMessage('Invalid purchase order ID')
   ],
   validate,
+  roleGuard('admin'),
   receivePurchaseOrder
 );
 
 /**
  * @route   DELETE /api/inventory/purchase-orders/:id
  * @desc    Delete purchase order (soft delete)
- * @access  Private
+ * @access  Private (Admin only)
  */
 router.delete(
   '/purchase-orders/:id',
@@ -1840,6 +1856,7 @@ router.delete(
       .withMessage('Invalid purchase order ID')
   ],
   validate,
+  roleGuard('admin'),
   deletePurchaseOrder
 );
 
