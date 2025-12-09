@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "40c2e582-b7ca-48b4-88ec-479d32785784",
 		"name": "Inventory Management API - Complete",
-		"description": "Complete API collection for Inventory Management System including all endpoints for Materials, Stock Areas, Inward, Material Requests, Material Allocation, Stock Transfers, Consumption, Person Stock, Returns, Reports, Stock Levels, Files, Audit, Notifications, Search, Bulk Operations, Export, and Validation",
+		"description": "Complete API collection for Inventory Management System including all endpoints for Materials, Stock Areas, Inward, Material Requests, Material Allocation, Stock Transfers, Consumption, Person Stock, Returns, Reports, Stock Levels, Files, Audit, Notifications, Search, Bulk Operations, Export, Validation, Business Partners, Purchase Requests, and Purchase Orders. Admin-only routes are marked with [ADMIN ONLY].",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -518,7 +518,26 @@
 							"raw": "{{baseUrl}}/inventory/inward/{{inwardId}}",
 							"host": ["{{baseUrl}}"],
 							"path": ["inventory", "inward", "{{inwardId}}"]
-						}
+						},
+						"description": "Delete inward entry (Admin only)"
+					}
+				},
+				{
+					"name": "Mark Inward as Completed [ADMIN ONLY]",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/inward/{{inwardId}}/complete",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "inward", "{{inwardId}}", "complete"]
+						},
+						"description": "Mark inward entry as completed and create inventory records (Admin only)"
 					}
 				}
 			]
@@ -611,7 +630,8 @@
 							"raw": "{{baseUrl}}/inventory/material-request/{{materialRequestId}}/approve",
 							"host": ["{{baseUrl}}"],
 							"path": ["inventory", "material-request", "{{materialRequestId}}", "approve"]
-						}
+						},
+						"description": "Approve or reject material request (Admin only)"
 					}
 				},
 				{
@@ -1470,7 +1490,7 @@
 					}
 				},
 				{
-					"name": "Approve Return",
+					"name": "Approve Return [ADMIN ONLY]",
 					"request": {
 						"method": "PUT",
 						"header": [
@@ -1496,7 +1516,7 @@
 					}
 				},
 				{
-					"name": "Reject Return",
+					"name": "Reject Return [ADMIN ONLY]",
 					"request": {
 						"method": "PUT",
 						"header": [
@@ -1673,6 +1693,469 @@
 			]
 		},
 		{
+			"name": "Business Partners",
+			"item": [
+				{
+					"name": "Get All Business Partners",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/business-partners?page=1&limit=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "business-partners"],
+							"query": [
+								{"key": "page", "value": "1"},
+								{"key": "limit", "value": "10"},
+								{"key": "partnerType", "value": "", "disabled": true},
+								{"key": "search", "value": "", "disabled": true}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Business Partner By ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/business-partners/{{partnerId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "business-partners", "{{partnerId}}"]
+						}
+					}
+				},
+				{
+					"name": "Create Business Partner",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"partnerName\": \"ABC Suppliers\",\n  \"partnerType\": \"SUPPLIER\",\n  \"email\": \"contact@abcsuppliers.com\",\n  \"phone\": \"+1234567890\",\n  \"address\": \"123 Main St\",\n  \"city\": \"Mumbai\",\n  \"state\": \"Maharashtra\",\n  \"pincode\": \"400001\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/business-partners",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "business-partners"]
+						}
+					}
+				},
+				{
+					"name": "Update Business Partner",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"partnerName\": \"ABC Suppliers Updated\",\n  \"email\": \"newemail@abcsuppliers.com\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/business-partners/{{partnerId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "business-partners", "{{partnerId}}"]
+						}
+					}
+				},
+				{
+					"name": "Delete Business Partner [ADMIN ONLY]",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/business-partners/{{partnerId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "business-partners", "{{partnerId}}"]
+						},
+						"description": "Delete business partner (Admin only)"
+					}
+				}
+			]
+		},
+		{
+			"name": "Purchase Requests",
+			"item": [
+				{
+					"name": "Get All Purchase Requests",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-requests?page=1&limit=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-requests"],
+							"query": [
+								{"key": "page", "value": "1"},
+								{"key": "limit", "value": "10"},
+								{"key": "status", "value": "", "disabled": true},
+								{"key": "search", "value": "", "disabled": true}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Purchase Request By ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-requests/{{prId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-requests", "{{prId}}"]
+						}
+					}
+				},
+				{
+					"name": "Create Purchase Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"prNumber\": \"PR-2025-001\",\n  \"requestedDate\": \"2025-12-06\",\n  \"items\": [\n    {\n      \"materialId\": \"{{materialId}}\",\n      \"requestedQuantity\": 100,\n      \"remarks\": \"Urgent requirement\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-requests",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-requests"]
+						}
+					}
+				},
+				{
+					"name": "Update Purchase Request",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"requestedDate\": \"2025-12-07\",\n  \"items\": [\n    {\n      \"materialId\": \"{{materialId}}\",\n      \"requestedQuantity\": 150\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-requests/{{prId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-requests", "{{prId}}"]
+						}
+					}
+				},
+				{
+					"name": "Submit Purchase Request",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-requests/{{prId}}/submit",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-requests", "{{prId}}", "submit"]
+						},
+						"description": "Submit purchase request (DRAFT -> SUBMITTED)"
+					}
+				},
+				{
+					"name": "Approve Purchase Request [ADMIN ONLY]",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-requests/{{prId}}/approve",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-requests", "{{prId}}", "approve"]
+						},
+						"description": "Approve purchase request (Admin only)"
+					}
+				},
+				{
+					"name": "Reject Purchase Request [ADMIN ONLY]",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"remarks\": \"Rejected due to budget constraints\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-requests/{{prId}}/reject",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-requests", "{{prId}}", "reject"]
+						},
+						"description": "Reject purchase request (Admin only)"
+					}
+				},
+				{
+					"name": "Delete Purchase Request [ADMIN ONLY]",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-requests/{{prId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-requests", "{{prId}}"]
+						},
+						"description": "Delete purchase request (Admin only)"
+					}
+				}
+			]
+		},
+		{
+			"name": "Purchase Orders",
+			"item": [
+				{
+					"name": "Get All Purchase Orders",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-orders?page=1&limit=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-orders"],
+							"query": [
+								{"key": "page", "value": "1"},
+								{"key": "limit", "value": "10"},
+								{"key": "status", "value": "", "disabled": true},
+								{"key": "search", "value": "", "disabled": true}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Purchase Order By ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-orders/{{poId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-orders", "{{poId}}"]
+						}
+					}
+				},
+				{
+					"name": "Create Purchase Order from PR",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"poNumber\": \"PO-2025-001\",\n  \"vendorId\": \"{{partnerId}}\",\n  \"poDate\": \"2025-12-06\",\n  \"items\": [\n    {\n      \"materialId\": \"{{materialId}}\",\n      \"quantity\": 100,\n      \"unitPrice\": 50.00\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-orders/from-pr/{{prId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-orders", "from-pr", "{{prId}}"]
+						},
+						"description": "Create purchase order from purchase request"
+					}
+				},
+				{
+					"name": "Create Purchase Order (Standalone)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"poNumber\": \"PO-2025-002\",\n  \"vendorId\": \"{{partnerId}}\",\n  \"poDate\": \"2025-12-06\",\n  \"items\": [\n    {\n      \"materialId\": \"{{materialId}}\",\n      \"quantity\": 100,\n      \"unitPrice\": 50.00\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-orders",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-orders"]
+						}
+					}
+				},
+				{
+					"name": "Update Purchase Order",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"poDate\": \"2025-12-07\",\n  \"items\": [\n    {\n      \"materialId\": \"{{materialId}}\",\n      \"quantity\": 150,\n      \"unitPrice\": 55.00\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-orders/{{poId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-orders", "{{poId}}"]
+						}
+					}
+				},
+				{
+					"name": "Mark Purchase Order as Sent [ADMIN ONLY]",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-orders/{{poId}}/send",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-orders", "{{poId}}", "send"]
+						},
+						"description": "Mark purchase order as SENT (DRAFT -> SENT) (Admin only)"
+					}
+				},
+				{
+					"name": "Mark Purchase Order as Received [ADMIN ONLY]",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-orders/{{poId}}/receive",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-orders", "{{poId}}", "receive"]
+						},
+						"description": "Mark purchase order as RECEIVED (SENT -> RECEIVED) (Admin only)"
+					}
+				},
+				{
+					"name": "Delete Purchase Order [ADMIN ONLY]",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/inventory/purchase-orders/{{poId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["inventory", "purchase-orders", "{{poId}}"]
+						},
+						"description": "Delete purchase order (Admin only)"
+					}
+				}
+			]
+		},
+		{
 			"name": "Validation",
 			"item": [
 				{
@@ -1834,13 +2317,28 @@
 			"value": "",
 			"type": "string"
 		},
-		{
-			"key": "ticketId",
-			"value": "",
-			"type": "string"
+				{
+					"key": "ticketId",
+					"value": "",
+					"type": "string"
+				},
+				{
+					"key": "partnerId",
+					"value": "",
+					"type": "string"
+				},
+				{
+					"key": "prId",
+					"value": "",
+					"type": "string"
+				},
+				{
+					"key": "poId",
+					"value": "",
+					"type": "string"
+				}
+			]
 		}
-	]
-}
 
 
 
