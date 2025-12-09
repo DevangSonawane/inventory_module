@@ -1,6 +1,6 @@
 import express from 'express';
 import { body, param } from 'express-validator';
-import { validate } from '../middleware/validator.js';
+import { validate, parseInwardItems } from '../middleware/validator.js';
 import { authenticate } from '../middleware/auth.js';
 import {
   addStock,
@@ -118,6 +118,31 @@ import {
   validateProductCode,
   validateSlipNumber
 } from '../controllers/validationController.js';
+import {
+  getAllBusinessPartners,
+  getBusinessPartnerById,
+  createBusinessPartner,
+  updateBusinessPartner,
+  deleteBusinessPartner
+} from '../controllers/businessPartnerController.js';
+import {
+  getAllPurchaseRequests,
+  getPurchaseRequestById,
+  createPurchaseRequest,
+  updatePurchaseRequest,
+  submitPurchaseRequest,
+  approvePurchaseRequest,
+  rejectPurchaseRequest,
+  deletePurchaseRequest
+} from '../controllers/purchaseRequestController.js';
+import {
+  getAllPurchaseOrders,
+  getPurchaseOrderById,
+  createPOFromPR,
+  createPurchaseOrder,
+  updatePurchaseOrder,
+  deletePurchaseOrder
+} from '../controllers/purchaseOrderController.js';
 import { uploadInwardDocuments } from '../middleware/upload.js';
 
 const router = express.Router();
@@ -528,6 +553,8 @@ router.delete(
  */
 router.post(
   '/inward',
+  uploadInwardDocuments, // Multer middleware must come BEFORE validation to parse FormData
+  parseInwardItems, // Parse items JSON string before validation
   [
     body('invoiceNumber')
       .notEmpty()
@@ -542,7 +569,18 @@ router.post(
       .isUUID()
       .withMessage('Valid stock area ID is required'),
     body('items')
-      .isArray({ min: 1 })
+      .custom((value) => {
+        // Handle both JSON string (from FormData) and array
+        if (typeof value === 'string') {
+          try {
+            const parsed = JSON.parse(value);
+            return Array.isArray(parsed) && parsed.length > 0;
+          } catch {
+            return false;
+          }
+        }
+        return Array.isArray(value) && value.length > 0;
+      })
       .withMessage('At least one item is required'),
     body('items.*.materialId')
       .notEmpty()
@@ -1307,6 +1345,422 @@ router.get('/export/inward', exportInward);
  * @access  Private
  */
 router.get('/export/stock-levels', exportStockLevels);
+
+// ==================== BUSINESS PARTNERS ROUTES ====================
+
+/**
+ * @route   GET /api/inventory/business-partners
+ * @desc    Get all business partners with filtering and pagination
+ * @access  Private
+ */
+router.get('/business-partners', getAllBusinessPartners);
+
+/**
+ * @route   GET /api/inventory/business-partners/:id
+ * @desc    Get single business partner by ID
+ * @access  Private
+ */
+router.get(
+  '/business-partners/:id',
+  authenticate,
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid business partner ID')
+  ],
+  validate,
+  getBusinessPartnerById
+);
+
+/**
+ * @route   POST /api/inventory/business-partners
+ * @desc    Create new business partner
+ * @access  Private
+ */
+router.post(
+  '/business-partners',
+  authenticate,
+  [
+    body('partnerName')
+      .notEmpty()
+      .trim()
+      .withMessage('Partner name is required'),
+    body('partnerType')
+      .optional()
+      .isIn(['VENDOR', 'SUPPLIER', 'CUSTOMER'])
+      .withMessage('Invalid partner type'),
+    body('email')
+      .optional()
+      .isEmail()
+      .withMessage('Invalid email format'),
+    body('phone')
+      .optional()
+      .trim(),
+    body('orgId')
+      .optional()
+      .isUUID()
+      .withMessage('Invalid organization ID')
+  ],
+  validate,
+  createBusinessPartner
+);
+
+/**
+ * @route   PUT /api/inventory/business-partners/:id
+ * @desc    Update business partner
+ * @access  Private
+ */
+router.put(
+  '/business-partners/:id',
+  authenticate,
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid business partner ID'),
+    body('partnerName')
+      .optional()
+      .trim()
+      .notEmpty()
+      .withMessage('Partner name cannot be empty'),
+    body('partnerType')
+      .optional()
+      .isIn(['VENDOR', 'SUPPLIER', 'CUSTOMER'])
+      .withMessage('Invalid partner type'),
+    body('email')
+      .optional()
+      .isEmail()
+      .withMessage('Invalid email format')
+  ],
+  validate,
+  updateBusinessPartner
+);
+
+/**
+ * @route   DELETE /api/inventory/business-partners/:id
+ * @desc    Delete business partner (soft delete)
+ * @access  Private
+ */
+router.delete(
+  '/business-partners/:id',
+  authenticate,
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid business partner ID')
+  ],
+  validate,
+  deleteBusinessPartner
+);
+
+// ==================== PURCHASE REQUEST ROUTES ====================
+
+/**
+ * @route   GET /api/inventory/purchase-requests
+ * @desc    Get all purchase requests with filtering and pagination
+ * @access  Private
+ */
+router.get('/purchase-requests', getAllPurchaseRequests);
+
+/**
+ * @route   GET /api/inventory/purchase-requests/:id
+ * @desc    Get single purchase request by ID with items
+ * @access  Private
+ */
+router.get(
+  '/purchase-requests/:id',
+  authenticate,
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid purchase request ID')
+  ],
+  validate,
+  getPurchaseRequestById
+);
+
+/**
+ * @route   POST /api/inventory/purchase-requests
+ * @desc    Create new purchase request with items
+ * @access  Private
+ */
+router.post(
+  '/purchase-requests',
+  authenticate,
+  [
+    body('prNumber')
+      .optional()
+      .trim(),
+    body('requestedDate')
+      .optional()
+      .isISO8601()
+      .withMessage('Invalid date format'),
+    body('items')
+      .isArray({ min: 1 })
+      .withMessage('At least one item is required'),
+    body('items.*.materialId')
+      .notEmpty()
+      .isUUID()
+      .withMessage('Valid material ID is required for each item'),
+    body('items.*.requestedQuantity')
+      .isInt({ min: 1 })
+      .withMessage('Requested quantity must be a positive integer'),
+    body('orgId')
+      .optional()
+      .isUUID()
+      .withMessage('Invalid organization ID')
+  ],
+  validate,
+  createPurchaseRequest
+);
+
+/**
+ * @route   PUT /api/inventory/purchase-requests/:id
+ * @desc    Update purchase request
+ * @access  Private
+ */
+router.put(
+  '/purchase-requests/:id',
+  authenticate,
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid purchase request ID'),
+    body('requestedDate')
+      .optional()
+      .isISO8601()
+      .withMessage('Invalid date format'),
+    body('items')
+      .optional()
+      .isArray({ min: 1 })
+      .withMessage('At least one item is required if provided')
+  ],
+  validate,
+  updatePurchaseRequest
+);
+
+/**
+ * @route   PUT /api/inventory/purchase-requests/:id/submit
+ * @desc    Submit purchase request (DRAFT -> SUBMITTED)
+ * @access  Private
+ */
+router.put(
+  '/purchase-requests/:id/submit',
+  authenticate,
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid purchase request ID')
+  ],
+  validate,
+  submitPurchaseRequest
+);
+
+/**
+ * @route   PUT /api/inventory/purchase-requests/:id/approve
+ * @desc    Approve purchase request
+ * @access  Private
+ */
+router.put(
+  '/purchase-requests/:id/approve',
+  authenticate,
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid purchase request ID')
+  ],
+  validate,
+  approvePurchaseRequest
+);
+
+/**
+ * @route   PUT /api/inventory/purchase-requests/:id/reject
+ * @desc    Reject purchase request
+ * @access  Private
+ */
+router.put(
+  '/purchase-requests/:id/reject',
+  authenticate,
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid purchase request ID'),
+    body('remarks')
+      .notEmpty()
+      .trim()
+      .withMessage('Rejection remarks are required')
+  ],
+  validate,
+  rejectPurchaseRequest
+);
+
+/**
+ * @route   DELETE /api/inventory/purchase-requests/:id
+ * @desc    Delete purchase request (soft delete)
+ * @access  Private
+ */
+router.delete(
+  '/purchase-requests/:id',
+  authenticate,
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid purchase request ID')
+  ],
+  validate,
+  deletePurchaseRequest
+);
+
+// ==================== PURCHASE ORDER ROUTES ====================
+
+/**
+ * @route   GET /api/inventory/purchase-orders
+ * @desc    Get all purchase orders with filtering and pagination
+ * @access  Private
+ */
+router.get('/purchase-orders', getAllPurchaseOrders);
+
+/**
+ * @route   POST /api/inventory/purchase-orders/from-pr/:prId
+ * @desc    Create purchase order from purchase request
+ * @access  Private
+ * @note    This route must come before /purchase-orders/:id to avoid route conflicts
+ */
+router.post(
+  '/purchase-orders/from-pr/:prId',
+  [
+    param('prId')
+      .isUUID()
+      .withMessage('Invalid purchase request ID'),
+    body('poNumber')
+      .optional()
+      .trim(),
+    body('vendorId')
+      .optional()
+      .isUUID()
+      .withMessage('Invalid vendor ID'),
+    body('poDate')
+      .optional()
+      .isISO8601()
+      .withMessage('Invalid date format'),
+    body('items')
+      .optional()
+      .isArray({ min: 1 })
+      .withMessage('At least one item is required if provided'),
+    body('orgId')
+      .optional()
+      .isUUID()
+      .withMessage('Invalid organization ID')
+  ],
+  validate,
+  createPOFromPR
+);
+
+/**
+ * @route   POST /api/inventory/purchase-orders
+ * @desc    Create new purchase order (standalone)
+ * @access  Private
+ */
+router.post(
+  '/purchase-orders',
+  [
+    body('poNumber')
+      .optional()
+      .trim(),
+    body('vendorId')
+      .optional()
+      .isUUID()
+      .withMessage('Invalid vendor ID'),
+    body('poDate')
+      .optional()
+      .isISO8601()
+      .withMessage('Invalid date format'),
+    body('items')
+      .isArray({ min: 1 })
+      .withMessage('At least one item is required'),
+    body('items.*.materialId')
+      .notEmpty()
+      .isUUID()
+      .withMessage('Valid material ID is required for each item'),
+    body('items.*.quantity')
+      .isInt({ min: 1 })
+      .withMessage('Quantity must be a positive integer'),
+    body('items.*.unitPrice')
+      .optional()
+      .isFloat({ min: 0 })
+      .withMessage('Unit price must be a non-negative number'),
+    body('orgId')
+      .optional()
+      .isUUID()
+      .withMessage('Invalid organization ID')
+  ],
+  validate,
+  createPurchaseOrder
+);
+
+/**
+ * @route   GET /api/inventory/purchase-orders/:id
+ * @desc    Get single purchase order by ID with items
+ * @access  Private
+ */
+router.get(
+  '/purchase-orders/:id',
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid purchase order ID')
+  ],
+  validate,
+  getPurchaseOrderById
+);
+
+/**
+ * @route   PUT /api/inventory/purchase-orders/:id
+ * @desc    Update purchase order
+ * @access  Private
+ */
+router.put(
+  '/purchase-orders/:id',
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid purchase order ID'),
+    body('vendorId')
+      .optional()
+      .isUUID()
+      .withMessage('Invalid vendor ID'),
+    body('poDate')
+      .optional()
+      .isISO8601()
+      .withMessage('Invalid date format'),
+    body('status')
+      .optional()
+      .isIn(['DRAFT', 'SENT', 'RECEIVED', 'CANCELLED'])
+      .withMessage('Invalid status'),
+    body('items')
+      .optional()
+      .isArray({ min: 1 })
+      .withMessage('At least one item is required if provided')
+  ],
+  validate,
+  updatePurchaseOrder
+);
+
+/**
+ * @route   DELETE /api/inventory/purchase-orders/:id
+ * @desc    Delete purchase order (soft delete)
+ * @access  Private
+ */
+router.delete(
+  '/purchase-orders/:id',
+  authenticate,
+  [
+    param('id')
+      .isUUID()
+      .withMessage('Invalid purchase order ID')
+  ],
+  validate,
+  deletePurchaseOrder
+);
 
 // ==================== VALIDATION ROUTES ====================
 

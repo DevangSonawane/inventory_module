@@ -17,6 +17,11 @@ import InventoryMaster from './InventoryMaster.js';
 import MaterialAllocation from './MaterialAllocation.js';
 import ReturnRecord from './ReturnRecord.js';
 import ReturnItem from './ReturnItem.js';
+import BusinessPartner from './BusinessPartner.js';
+import PurchaseRequest from './PurchaseRequest.js';
+import PurchaseRequestItem from './PurchaseRequestItem.js';
+import PurchaseOrder from './PurchaseOrder.js';
+import PurchaseOrderItem from './PurchaseOrderItem.js';
 
 // ==================== INVENTORY MODEL ASSOCIATIONS ====================
 
@@ -128,6 +133,35 @@ InventoryMaster.belongsTo(User, {
   constraints: false // Allow null when location_type is not PERSON
 });
 
+// BusinessPartner associations
+BusinessPartner.hasMany(PurchaseOrder, { foreignKey: 'vendor_id', as: 'purchaseOrders' });
+PurchaseOrder.belongsTo(BusinessPartner, { foreignKey: 'vendor_id', as: 'vendor' });
+
+// PurchaseRequest associations
+PurchaseRequest.hasMany(PurchaseRequestItem, { foreignKey: 'pr_id', as: 'items' });
+PurchaseRequestItem.belongsTo(PurchaseRequest, { foreignKey: 'pr_id', as: 'purchaseRequest' });
+
+PurchaseRequest.hasMany(PurchaseOrder, { foreignKey: 'pr_id', as: 'purchaseOrders' });
+PurchaseOrder.belongsTo(PurchaseRequest, { foreignKey: 'pr_id', as: 'purchaseRequest' });
+
+PurchaseRequest.belongsTo(User, { foreignKey: 'requested_by', as: 'requester' });
+PurchaseRequest.belongsTo(User, { foreignKey: 'approved_by', as: 'approver' });
+User.hasMany(PurchaseRequest, { foreignKey: 'requested_by', as: 'purchaseRequests' });
+
+PurchaseRequestItem.belongsTo(Material, { foreignKey: 'material_id', as: 'material' });
+Material.hasMany(PurchaseRequestItem, { foreignKey: 'material_id', as: 'purchaseRequestItems' });
+
+// PurchaseOrder associations
+PurchaseOrder.hasMany(PurchaseOrderItem, { foreignKey: 'po_id', as: 'items' });
+PurchaseOrderItem.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'purchaseOrder' });
+
+PurchaseOrderItem.belongsTo(Material, { foreignKey: 'material_id', as: 'material' });
+Material.hasMany(PurchaseOrderItem, { foreignKey: 'material_id', as: 'purchaseOrderItems' });
+
+// InwardEntry can link to PurchaseOrder
+InwardEntry.belongsTo(PurchaseOrder, { foreignKey: 'po_id', as: 'purchaseOrder' });
+PurchaseOrder.hasMany(InwardEntry, { foreignKey: 'po_id', as: 'inwardEntries' });
+
 // Export all models
 const models = {
   User,
@@ -148,6 +182,11 @@ const models = {
   MaterialAllocation,
   ReturnRecord,
   ReturnItem,
+  BusinessPartner,
+  PurchaseRequest,
+  PurchaseRequestItem,
+  PurchaseOrder,
+  PurchaseOrderItem,
 };
 
 export default models;

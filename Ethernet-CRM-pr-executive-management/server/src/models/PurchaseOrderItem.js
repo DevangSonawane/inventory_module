@@ -1,38 +1,43 @@
 import { DataTypes } from 'sequelize';
 import sequelize from '../config/database.js';
 
-const MaterialRequestItem = sequelize.define('material_request_item', {
+const PurchaseOrderItem = sequelize.define('purchase_order_item', {
   item_id: {
     type: DataTypes.UUID,
     defaultValue: DataTypes.UUIDV4,
     primaryKey: true,
   },
-  request_id: {
+  po_id: {
     type: DataTypes.UUID,
     allowNull: false,
-    comment: 'Reference to material request'
+    comment: 'Reference to purchase order'
   },
   material_id: {
     type: DataTypes.UUID,
     allowNull: false,
     comment: 'Reference to material'
   },
-  requested_quantity: {
+  quantity: {
     type: DataTypes.INTEGER,
     allowNull: false,
     defaultValue: 1,
-    comment: 'Quantity requested'
+    comment: 'Ordered quantity'
   },
-  approved_quantity: {
-    type: DataTypes.INTEGER,
+  unit_price: {
+    type: DataTypes.DECIMAL(10, 2),
     allowNull: true,
-    comment: 'Quantity approved (can be less than requested)'
+    comment: 'Unit price'
+  },
+  total_amount: {
+    type: DataTypes.DECIMAL(15, 2),
+    allowNull: true,
+    comment: 'Total amount for this item (quantity * unit_price)'
   },
   uom: {
     type: DataTypes.STRING(50),
     allowNull: false,
     defaultValue: 'PIECE(S)',
-    comment: 'Unit of measurement'
+    comment: 'Unit of measure'
   },
   remarks: {
     type: DataTypes.TEXT,
@@ -40,12 +45,12 @@ const MaterialRequestItem = sequelize.define('material_request_item', {
     comment: 'Additional remarks'
   },
 }, {
-  tableName: 'material_request_items',
+  tableName: 'purchase_order_items',
   timestamps: true,
   underscored: true,
   indexes: [
     {
-      fields: ['request_id']
+      fields: ['po_id']
     },
     {
       fields: ['material_id']
@@ -53,15 +58,5 @@ const MaterialRequestItem = sequelize.define('material_request_item', {
   ]
 });
 
-export default MaterialRequestItem;
-
-
-
-
-
-
-
-
-
-
+export default PurchaseOrderItem;
 

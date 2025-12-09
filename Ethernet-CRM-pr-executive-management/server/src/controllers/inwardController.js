@@ -16,23 +16,26 @@ export const createInward = async (req, res) => {
   const transaction = await sequelize.transaction();
   
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      await transaction.rollback();
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
-
+    // Parse FormData fields (multer puts them in req.body as strings)
+    // Note: items is already parsed by parseInwardItems middleware
     const {
       date,
       invoiceNumber,
       partyName,
       purchaseOrder,
+      poId, // Purchase Order UUID
       stockAreaId,
       vehicleNumber,
       remark,
-      items, // Array of items
+      items, // Array of items (already parsed by middleware)
       documents // Array of document file paths/URLs
     } = req.body;
+
+    // Get uploaded files from multer (only files with fieldname 'documents')
+    const uploadedFiles = (req.files || []).filter(file => file.fieldname === 'documents');
+    if (uploadedFiles.length > 0) {
+      documents = uploadedFiles.map(file => `/uploads/inward/${file.filename}`);
+    }
 
     const userId = req.user?.id || req.user?.user_id;
 
@@ -81,6 +84,7 @@ export const createInward = async (req, res) => {
       invoice_number: invoiceNumber,
       party_name: partyName,
       purchase_order: purchaseOrder || null,
+      po_id: poId || null,
       stock_area_id: stockAreaId,
       vehicle_number: vehicleNumber || null,
       slip_number: slipNumber,

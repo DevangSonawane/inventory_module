@@ -25,7 +25,12 @@ const InwardEntry = sequelize.define('inward_entry', {
   purchase_order: {
     type: DataTypes.STRING(100),
     allowNull: true,
-    comment: 'Purchase order number'
+    comment: 'Purchase order number (legacy field)'
+  },
+  po_id: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    comment: 'Purchase Order ID (links to purchase_orders table)'
   },
   stock_area_id: {
     type: DataTypes.UUID,
@@ -102,11 +107,15 @@ const InwardEntry = sequelize.define('inward_entry', {
     },
     {
       fields: ['org_id']
+    },
+    {
+      fields: ['po_id']
     }
   ]
 });
 
 export default InwardEntry;
+
 
 
 

@@ -44,20 +44,30 @@ export const uploadKycFiles = multer({
 ]);
 
 // Inward document upload middleware - accepts multiple images and PDFs
+// Uses .any() to parse BOTH files and text fields from FormData
 export const uploadInwardDocuments = multer({
   storage: multer.diskStorage({
     destination: function (req, file, cb) {
-      // Upload to uploads/inward directory relative to server root
-      const uploadPath = path.join(__dirname, '../../uploads/inward');
-      if (!fs.existsSync(uploadPath)) {
-        fs.mkdirSync(uploadPath, { recursive: true });
+      // Only save actual files (fieldname === 'documents') to disk
+      if (file && file.fieldname === 'documents') {
+        const uploadPath = path.join(__dirname, '../../uploads/inward');
+        if (!fs.existsSync(uploadPath)) {
+          fs.mkdirSync(uploadPath, { recursive: true });
+        }
+        cb(null, uploadPath);
+      } else {
+        // For text fields, multer will put them in req.body automatically
+        cb(null, '');
       }
-      cb(null, uploadPath);
     },
     filename: function (req, file, cb) {
-      // Generate unique filename: timestamp-originalname
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      cb(null, uniqueSuffix + '-' + file.originalname);
+      // Only generate filename for actual files
+      if (file && file.fieldname === 'documents') {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + '-' + file.originalname);
+      } else {
+        cb(null, '');
+      }
     }
   }),
   limits: { 
@@ -65,11 +75,17 @@ export const uploadInwardDocuments = multer({
     files: 10 // Maximum 10 files
   },
   fileFilter: (req, file, cb) => {
-    // Accept images and PDFs
-    if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
-      cb(null, true);
+    // Only validate actual files, text fields don't have mimetype
+    if (file && file.fieldname === 'documents') {
+      // Accept images and PDFs
+      if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
+        cb(null, true);
+      } else {
+        cb(new Error('Only images and PDF files are allowed'));
+      }
     } else {
-      cb(new Error('Only images and PDF files are allowed'));
+      // Allow text fields to pass through
+      cb(null, true);
     }
   }
-}).array('documents', 10); // Accept up to 10 files with field name 'documents'
+}).any(); // Use .any() to parse ALL fields (both files and text) from FormData
