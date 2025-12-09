@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import './models/index.js';
 import routes from './routes/index.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
+import { requestLogger } from './middleware/requestLogger.js';
 
 dotenv.config();
 
@@ -31,6 +32,8 @@ if (process.env.NODE_ENV === 'development') {
     next();
   });
 }
+// Lightweight structured-ish logger for all requests (method, path, status, duration)
+app.use(requestLogger('api'));
 
 // API routes
 app.use('/api/v1', routes);
