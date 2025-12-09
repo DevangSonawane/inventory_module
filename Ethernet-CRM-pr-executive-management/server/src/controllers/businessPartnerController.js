@@ -12,18 +12,11 @@ export const getAllBusinessPartners = async (req, res) => {
       page = 1,
       limit = 50,
       search = '',
-      partnerType = '',
-      orgId
+      partnerType = ''
     } = req.query;
 
     const offset = (parseInt(page) - 1) * parseInt(limit);
-    const where = {
-      is_active: true
-    };
-
-    if (orgId) {
-      where.org_id = orgId;
-    }
+    const where = req.withOrg ? req.withOrg({ is_active: true }) : { is_active: true };
 
     if (partnerType) {
       where.partner_type = partnerType;
@@ -76,7 +69,9 @@ export const getBusinessPartnerById = async (req, res) => {
     const { id } = req.params;
 
     const businessPartner = await BusinessPartner.findOne({
-      where: { partner_id: id, is_active: true }
+      where: req.withOrg
+        ? req.withOrg({ partner_id: id, is_active: true })
+        : { partner_id: id, is_active: true }
     });
 
     if (!businessPartner) {
@@ -135,7 +130,7 @@ export const createBusinessPartner = async (req, res) => {
       email: email || null,
       phone: phone || null,
       address: address || null,
-      org_id: orgId || null,
+      org_id: req.orgId || orgId || null,
       is_active: true
     });
 
@@ -183,7 +178,9 @@ export const updateBusinessPartner = async (req, res) => {
     } = req.body;
 
     const businessPartner = await BusinessPartner.findOne({
-      where: { partner_id: id, is_active: true }
+      where: req.withOrg
+        ? req.withOrg({ partner_id: id, is_active: true })
+        : { partner_id: id, is_active: true }
     });
 
     if (!businessPartner) {
