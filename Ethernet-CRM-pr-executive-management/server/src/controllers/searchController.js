@@ -22,7 +22,7 @@ import ReturnRecord from '../models/ReturnRecord.js';
  */
 export const globalSearch = async (req, res, next) => {
   try {
-    const { q, type, limit = 20 } = req.query;
+    const { q, type, limit = 20, page = 1 } = req.query;
 
     if (!q || q.trim().length === 0) {
       return res.status(400).json({
@@ -31,11 +31,25 @@ export const globalSearch = async (req, res, next) => {
       });
     }
 
-    const searchTerm = q.trim().toLowerCase();
-    const searchLimit = parseInt(limit);
+    const searchTerm = q.trim();
+    const searchLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 50);
+    const pageNumber = Math.max(parseInt(page) || 1, 1);
+    const orgId = req.user?.org_id || req.user?.orgId || req.user?.organizationId || req.user?.organisationId || null;
+    const perEntityLimit = searchLimit * pageNumber;
     const formattedResults = [];
 
+    // Helper to safely run each entity search without failing the whole request
+    const safeRun = async (label, fn) => {
+      try {
+        await fn();
+      } catch (err) {
+        console.error(`[search] ${label} failed:`, err?.message || err);
+      }
+    };
+
     // Helper function to format results
+    const withOrg = (base) => (orgId ? { ...base, org_id: orgId } : base);
+
     const formatResult = (entityType, entityId, title, description, metadata = {}) => {
       return {
         entityType,
@@ -47,9 +61,10 @@ export const globalSearch = async (req, res, next) => {
     };
 
     // 1. Search Materials (by name, product code, type, description)
-    if (!type || type === 'materials') {
+    await safeRun('materials', async () => {
+      if (type && type !== 'materials') return;
       const materials = await Material.findAll({
-        where: {
+        where: withOrg({
           is_active: true,
           [Op.or]: [
             { material_name: { [Op.like]: `%${searchTerm}%` } },
@@ -57,8 +72,8 @@ export const globalSearch = async (req, res, next) => {
             { material_type: { [Op.like]: `%${searchTerm}%` } },
             { description: { [Op.like]: `%${searchTerm}%` } },
           ],
-        },
-        limit: searchLimit,
+        }),
+        limit: perEntityLimit,
         attributes: ['material_id', 'material_name', 'product_code', 'material_type', 'uom', 'description'],
       });
       
@@ -71,19 +86,20 @@ export const globalSearch = async (req, res, next) => {
           { materialType: m.material_type, productCode: m.product_code }
         ));
       });
-    }
+    });
 
     // 2. Search Serial Numbers and MAC IDs (from InventoryMaster)
-    if (!type || type === 'serial' || type === 'inventory') {
+    await safeRun('inventory', async () => {
+      if (type && !(type === 'serial' || type === 'inventory')) return;
       const inventoryItems = await InventoryMaster.findAll({
-        where: {
+        where: withOrg({
           is_active: true,
           [Op.or]: [
             { serial_number: { [Op.like]: `%${searchTerm}%` } },
             { mac_id: { [Op.like]: `%${searchTerm}%` } },
             { ticket_id: { [Op.like]: `%${searchTerm}%` } },
           ],
-        },
+        }),
         include: [
           {
             model: Material,
@@ -91,7 +107,7 @@ export const globalSearch = async (req, res, next) => {
             attributes: ['material_name', 'product_code'],
           },
         ],
-        limit: searchLimit,
+        limit: perEntityLimit,
         attributes: ['id', 'serial_number', 'mac_id', 'ticket_id', 'status', 'current_location_type'],
       });
 
@@ -110,12 +126,13 @@ export const globalSearch = async (req, res, next) => {
           { serialNumber: item.serial_number, macId: item.mac_id, ticketId: item.ticket_id }
         ));
       });
-    }
+    });
 
     // 3. Search Inward Entries (by slip number, invoice, party, PO, vehicle, remarks)
-    if (!type || type === 'inward') {
+    await safeRun('inward', async () => {
+      if (type && type !== 'inward') return;
       const inwards = await InwardEntry.findAll({
-        where: {
+        where: withOrg({
           is_active: true,
           [Op.or]: [
             { slip_number: { [Op.like]: `%${searchTerm}%` } },
@@ -125,8 +142,8 @@ export const globalSearch = async (req, res, next) => {
             { vehicle_number: { [Op.like]: `%${searchTerm}%` } },
             { remark: { [Op.like]: `%${searchTerm}%` } },
           ],
-        },
-        limit: searchLimit,
+        }),
+        limit: perEntityLimit,
         attributes: ['inward_id', 'slip_number', 'invoice_number', 'party_name', 'date', 'status', 'vehicle_number'],
       });
 
@@ -139,20 +156,21 @@ export const globalSearch = async (req, res, next) => {
           { slipNumber: inward.slip_number, invoiceNumber: inward.invoice_number, status: inward.status }
         ));
       });
-    }
+    });
 
     // 4. Search Material Requests (by request ID, PR numbers, status, remarks)
-    if (!type || type === 'materialRequest') {
+    await safeRun('materialRequest', async () => {
+      if (type && type !== 'materialRequest') return;
       const materialRequests = await MaterialRequest.findAll({
-        where: {
+        where: withOrg({
           is_active: true,
           [Op.or]: [
             { request_id: { [Op.like]: `%${searchTerm}%` } },
             { status: { [Op.like]: `%${searchTerm}%` } },
             { remarks: { [Op.like]: `%${searchTerm}%` } },
           ],
-        },
-        limit: searchLimit * 2, // Get more to filter by pr_numbers
+        }),
+        limit: perEntityLimit * 2, // Get more to filter by pr_numbers
         attributes: ['request_id', 'pr_numbers', 'status', 'created_at', 'remarks'],
       });
 
@@ -160,10 +178,10 @@ export const globalSearch = async (req, res, next) => {
       const filteredRequests = materialRequests.filter(req => {
         const prNumbers = req.pr_numbers || [];
         const matchesPR = prNumbers.some(pr => 
-          pr.prNumber && pr.prNumber.toLowerCase().includes(searchTerm)
+          pr.prNumber && pr.prNumber.toLowerCase().includes(searchTerm.toLowerCase())
         );
         return matchesPR || true; // Include all since we already filtered by other fields
-      }).slice(0, searchLimit);
+      }).slice(0, perEntityLimit);
 
       filteredRequests.forEach(req => {
         const prNumbers = req.pr_numbers || [];
@@ -176,21 +194,22 @@ export const globalSearch = async (req, res, next) => {
           { status: req.status, prNumbers: prList }
         ));
       });
-    }
+    });
 
-    // 5. Search Stock Transfers (by transfer number, description, status)
-    if (!type || type === 'stockTransfer') {
+    // 5. Search Stock Transfers (by transfer number, remarks, status)
+    await safeRun('stockTransfer', async () => {
+      if (type && type !== 'stockTransfer') return;
       const stockTransfers = await StockTransfer.findAll({
-        where: {
+        where: withOrg({
           is_active: true,
           [Op.or]: [
             { transfer_number: { [Op.like]: `%${searchTerm}%` } },
-            { description: { [Op.like]: `%${searchTerm}%` } },
+            { remarks: { [Op.like]: `%${searchTerm}%` } },
             { status: { [Op.like]: `%${searchTerm}%` } },
           ],
-        },
-        limit: searchLimit,
-        attributes: ['transfer_id', 'transfer_number', 'transfer_date', 'status', 'description'],
+        }),
+        limit: perEntityLimit,
+        attributes: ['transfer_id', 'transfer_number', 'transfer_date', 'status', 'remarks'],
       });
 
       stockTransfers.forEach(transfer => {
@@ -198,24 +217,25 @@ export const globalSearch = async (req, res, next) => {
           'stockTransfer',
           transfer.transfer_id,
           `Stock Transfer: ${transfer.transfer_number}`,
-          `Date: ${transfer.transfer_date} | Status: ${transfer.status}`,
-          { transferNumber: transfer.transfer_number, status: transfer.status }
+          `Date: ${transfer.transfer_date} | Status: ${transfer.status}${transfer.remarks ? ` | Remarks: ${transfer.remarks}` : ''}`,
+          { transferNumber: transfer.transfer_number, status: transfer.status, remarks: transfer.remarks }
         ));
       });
-    }
+    });
 
     // 6. Search Consumption Records (by external ref, ticket ID, remarks)
-    if (!type || type === 'consumption') {
+    await safeRun('consumption', async () => {
+      if (type && type !== 'consumption') return;
       const consumptions = await ConsumptionRecord.findAll({
-        where: {
+        where: withOrg({
           is_active: true,
           [Op.or]: [
             { external_system_ref_id: { [Op.like]: `%${searchTerm}%` } },
             { ticket_id: { [Op.like]: `%${searchTerm}%` } },
             { remarks: { [Op.like]: `%${searchTerm}%` } },
           ],
-        },
-        limit: searchLimit,
+        }),
+        limit: perEntityLimit,
         attributes: ['consumption_id', 'external_system_ref_id', 'consumption_date', 'ticket_id', 'remarks'],
       });
 
@@ -228,19 +248,20 @@ export const globalSearch = async (req, res, next) => {
           { ticketId: consumption.ticket_id, externalRef: consumption.external_system_ref_id }
         ));
       });
-    }
+    });
 
     // 7. Search Purchase Orders (by PO number, vendor, status, remarks)
-    if (!type || type === 'purchaseOrder') {
+    await safeRun('purchaseOrder', async () => {
+      if (type && type !== 'purchaseOrder') return;
       const purchaseOrders = await PurchaseOrder.findAll({
-        where: {
+        where: withOrg({
           is_active: true,
           [Op.or]: [
             { po_number: { [Op.like]: `%${searchTerm}%` } },
             { remarks: { [Op.like]: `%${searchTerm}%` } },
             { status: { [Op.like]: `%${searchTerm}%` } },
           ],
-        },
+        }),
         include: [
           {
             model: BusinessPartner,
@@ -248,7 +269,7 @@ export const globalSearch = async (req, res, next) => {
             attributes: ['partner_name'],
           },
         ],
-        limit: searchLimit,
+        limit: perEntityLimit,
         attributes: ['po_id', 'po_number', 'po_date', 'status', 'remarks'],
       });
 
@@ -261,21 +282,22 @@ export const globalSearch = async (req, res, next) => {
           { poNumber: po.po_number, status: po.status, vendorName: po.vendor?.partner_name }
         ));
       });
-    }
+    });
 
     // 8. Search Purchase Requests (by PR number, status, remarks)
-    if (!type || type === 'purchaseRequest') {
+    await safeRun('purchaseRequest', async () => {
+      if (type && type !== 'purchaseRequest') return;
       const purchaseRequests = await PurchaseRequest.findAll({
-        where: {
+        where: withOrg({
           is_active: true,
           [Op.or]: [
             { pr_number: { [Op.like]: `%${searchTerm}%` } },
             { status: { [Op.like]: `%${searchTerm}%` } },
             { remarks: { [Op.like]: `%${searchTerm}%` } },
           ],
-        },
-        limit: searchLimit,
-        attributes: ['pr_id', 'pr_number', 'pr_date', 'status', 'remarks'],
+        }),
+        limit: perEntityLimit,
+        attributes: ['pr_id', 'pr_number', 'requested_date', 'status', 'remarks'],
       });
 
       purchaseRequests.forEach(pr => {
@@ -283,28 +305,29 @@ export const globalSearch = async (req, res, next) => {
           'purchaseRequest',
           pr.pr_id,
           `Purchase Request: ${pr.pr_number}`,
-          `Date: ${pr.pr_date} | Status: ${pr.status}`,
+          `Date: ${pr.requested_date} | Status: ${pr.status}`,
           { prNumber: pr.pr_number, status: pr.status }
         ));
       });
-    }
+    });
 
-    // 9. Search Business Partners (by name, contact, email, phone, GST, address)
-    if (!type || type === 'businessPartner') {
+    // 9. Search Business Partners (by name, type, contact, email, phone, address)
+    await safeRun('businessPartner', async () => {
+      if (type && type !== 'businessPartner') return;
       const businessPartners = await BusinessPartner.findAll({
-        where: {
+        where: withOrg({
           is_active: true,
           [Op.or]: [
             { partner_name: { [Op.like]: `%${searchTerm}%` } },
+            { partner_type: { [Op.like]: `%${searchTerm}%` } },
             { contact_person: { [Op.like]: `%${searchTerm}%` } },
             { email: { [Op.like]: `%${searchTerm}%` } },
             { phone: { [Op.like]: `%${searchTerm}%` } },
-            { gst_number: { [Op.like]: `%${searchTerm}%` } },
             { address: { [Op.like]: `%${searchTerm}%` } },
           ],
-        },
-        limit: searchLimit,
-        attributes: ['partner_id', 'partner_name', 'partner_type', 'contact_person', 'email', 'phone', 'gst_number'],
+        }),
+        limit: perEntityLimit,
+        attributes: ['partner_id', 'partner_name', 'partner_type', 'contact_person', 'email', 'phone'],
       });
 
       businessPartners.forEach(partner => {
@@ -316,19 +339,20 @@ export const globalSearch = async (req, res, next) => {
           { partnerType: partner.partner_type, email: partner.email, phone: partner.phone }
         ));
       });
-    }
+    });
 
     // 10. Search Stock Areas (by name, location code, address)
-    if (!type || type === 'stockArea') {
+    await safeRun('stockArea', async () => {
+      if (type && type !== 'stockArea') return;
       const stockAreas = await StockArea.findAll({
-        where: {
+        where: withOrg({
           is_active: true,
           [Op.or]: [
             { area_name: { [Op.like]: `%${searchTerm}%` } },
             { location_code: { [Op.like]: `%${searchTerm}%` } },
             { address: { [Op.like]: `%${searchTerm}%` } },
           ],
-        },
+        }),
         include: [
           {
             model: User,
@@ -336,7 +360,7 @@ export const globalSearch = async (req, res, next) => {
             attributes: ['name', 'email'],
           },
         ],
-        limit: searchLimit,
+        limit: perEntityLimit,
         attributes: ['area_id', 'area_name', 'location_code', 'address'],
       });
 
@@ -349,39 +373,14 @@ export const globalSearch = async (req, res, next) => {
           { locationCode: area.location_code, storeKeeper: area.storeKeeper?.name }
         ));
       });
-    }
+    });
 
-    // 11. Search Users (by name, email, employee code, phone)
-    if (!type || type === 'user') {
-      const users = await User.findAll({
-        where: {
-          isActive: true,
-          [Op.or]: [
-            { name: { [Op.like]: `%${searchTerm}%` } },
-            { email: { [Op.like]: `%${searchTerm}%` } },
-            { employeCode: { [Op.like]: `%${searchTerm}%` } },
-            { phoneNumber: { [Op.like]: `%${searchTerm}%` } },
-          ],
-        },
-        limit: searchLimit,
-        attributes: ['id', 'name', 'email', 'employeCode', 'phoneNumber', 'role'],
-      });
-
-      users.forEach(user => {
-        formattedResults.push(formatResult(
-          'user',
-          user.id.toString(),
-          `${user.name}${user.employeCode ? ` (${user.employeCode})` : ''}`,
-          `Email: ${user.email || 'N/A'} | Role: ${user.role}`,
-          { email: user.email, employeeCode: user.employeCode, role: user.role }
-        ));
-      });
-    }
+    // 11. Users are intentionally excluded from global search results per requirement
 
     // 12. Search Return Records (by return ID, ticket ID, reason, remarks)
     if (!type || type === 'return') {
       const returnRecords = await ReturnRecord.findAll({
-        where: {
+        where: withOrg({
           is_active: true,
           [Op.or]: [
             { return_id: { [Op.like]: `%${searchTerm}%` } },
@@ -389,9 +388,9 @@ export const globalSearch = async (req, res, next) => {
             { reason: { [Op.like]: `%${searchTerm}%` } },
             { remarks: { [Op.like]: `%${searchTerm}%` } },
           ],
-        },
-        limit: searchLimit,
-        attributes: ['return_id', 'return_date', 'ticket_id', 'reason', 'status', 'remarks'],
+        }),
+        limit: perEntityLimit,
+        attributes: ['return_id', 'return_date', 'ticket_id', 'reason', 'status', 'remarks', 'org_id'],
       });
 
       returnRecords.forEach(returnRecord => {
@@ -427,7 +426,7 @@ export const globalSearch = async (req, res, next) => {
             attributes: ['material_name', 'product_code'],
           },
         ],
-        limit: searchLimit,
+        limit: perEntityLimit,
         attributes: ['item_id', 'serial_number', 'mac_id', 'quantity', 'price', 'remarks'],
       });
 
@@ -457,16 +456,21 @@ export const globalSearch = async (req, res, next) => {
     formattedResults.sort((a, b) => {
       const aTitle = a.title.toLowerCase();
       const bTitle = b.title.toLowerCase();
-      const aExact = aTitle === searchTerm || aTitle.startsWith(searchTerm);
-      const bExact = bTitle === searchTerm || bTitle.startsWith(searchTerm);
+      const searchTermLower = searchTerm.toLowerCase();
+      const aExact = aTitle === searchTermLower || aTitle.startsWith(searchTermLower);
+      const bExact = bTitle === searchTermLower || bTitle.startsWith(searchTermLower);
       
       if (aExact && !bExact) return -1;
       if (!aExact && bExact) return 1;
       return aTitle.localeCompare(bTitle);
     });
 
-    // Limit total results
-    const limitedResults = formattedResults.slice(0, searchLimit * 2);
+    // Pagination over aggregated results
+    const pageSize = searchLimit * 2; // keep breadth per page
+    const startIndex = (pageNumber - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const limitedResults = formattedResults.slice(startIndex, endIndex);
+    const hasMore = formattedResults.length > endIndex;
 
     // Group results by entity type for summary
     const summary = {};
@@ -483,10 +487,22 @@ export const globalSearch = async (req, res, next) => {
           total: limitedResults.length,
           ...summary
         },
+        pagination: {
+          page: pageNumber,
+          limit: searchLimit,
+          pageSize,
+          hasMore
+        }
       },
     });
   } catch (error) {
     console.error('Error in global search:', error);
-    next(error);
+    console.error('Search query:', req.query);
+    console.error('Error stack:', error.stack);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to perform search',
+      error: error.message
+    });
   }
 };

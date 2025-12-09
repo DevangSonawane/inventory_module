@@ -2,6 +2,8 @@ import express from 'express';
 import { body, param } from 'express-validator';
 import { validate, parseInwardItems } from '../middleware/validator.js';
 import { authenticate } from '../middleware/auth.js';
+import { rateLimit } from '../middleware/rateLimit.js';
+import { requestLogger } from '../middleware/requestLogger.js';
 import {
   addStock,
   getAllAssets,
@@ -1320,9 +1322,14 @@ router.delete('/notifications/:notificationId', deleteNotification);
 /**
  * @route   GET /api/inventory/search
  * @desc    Global search across all inventory entities
- * @access  Private
+ * @access  Private (rate limited)
  */
-router.get('/search', globalSearch);
+router.get(
+  '/search',
+  rateLimit({ windowMs: 60_000, max: 60 }),
+  requestLogger('search'),
+  globalSearch
+);
 
 // ==================== BULK OPERATIONS ROUTES ====================
 
