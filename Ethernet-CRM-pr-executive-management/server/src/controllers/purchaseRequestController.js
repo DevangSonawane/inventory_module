@@ -26,18 +26,11 @@ export const getAllPurchaseRequests = async (req, res) => {
       page = 1,
       limit = 50,
       search = '',
-      status = '',
-      orgId
+      status = ''
     } = req.query;
 
     const offset = (parseInt(page) - 1) * parseInt(limit);
-    const where = {
-      is_active: true
-    };
-
-    if (orgId) {
-      where.org_id = orgId;
-    }
+    const where = req.withOrg ? req.withOrg({ is_active: true }) : { is_active: true };
 
     if (status) {
       where.status = status;
@@ -100,7 +93,9 @@ export const getPurchaseRequestById = async (req, res) => {
     const { id } = req.params;
 
     const purchaseRequest = await PurchaseRequest.findOne({
-      where: { pr_id: id, is_active: true },
+      where: req.withOrg
+        ? req.withOrg({ pr_id: id, is_active: true })
+        : { pr_id: id, is_active: true },
       include: [
         {
           model: PurchaseRequestItem,
