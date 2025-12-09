@@ -6,6 +6,8 @@ import roleRoutes from './roleRoutes.js';
 import moduleRoutes from './moduleRoutes.js';
 import travelTrackerRoutes from './travelTrackerRoute.js';
 import inventoryRoutes from './inventoryRoutes.js';
+import { rateLimit } from '../middleware/rateLimit.js';
+import { requestLogger } from '../middleware/requestLogger.js';
 const router = express.Router();
 
 // Health check
@@ -18,6 +20,9 @@ router.get('/health', (req, res) => {
 });
 
 // API routes
+router.use(rateLimit({ windowMs: 60_000, max: 300 }));
+router.use(requestLogger('api'));
+
 router.use('/auth', authRoutes);
 router.use('/leads', leadRoutes);
 router.use('/inventory', inventoryRoutes);

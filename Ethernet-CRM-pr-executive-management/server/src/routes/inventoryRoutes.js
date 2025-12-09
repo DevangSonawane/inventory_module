@@ -4,6 +4,7 @@ import { validate, parseInwardItems } from '../middleware/validator.js';
 import { authenticate } from '../middleware/auth.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 import { requestLogger } from '../middleware/requestLogger.js';
+import { orgContext } from '../middleware/orgContext.js';
 import {
   addStock,
   getAllAssets,
@@ -155,8 +156,9 @@ import { uploadInwardDocuments } from '../middleware/upload.js';
 
 const router = express.Router();
 
-// All routes require authentication
+// All routes require authentication and org context
 router.use(authenticate);
+router.use(orgContext);
 
 // Health check
 router.get("/health", (req, res) => {
