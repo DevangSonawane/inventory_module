@@ -22,11 +22,7 @@ export const getAllMaterials = async (req, res) => {
     const offset = (pageNumber - 1) * limitNumber;
 
     // Build where clause
-    const whereClause = {};
-
-    if (orgId) {
-      whereClause.org_id = orgId;
-    }
+    const whereClause = req.withOrg ? req.withOrg({}) : {};
 
     if (!showInactive || showInactive === 'false') {
       whereClause.is_active = true;
@@ -87,10 +83,9 @@ export const getMaterialById = async (req, res) => {
     const { id } = req.params;
 
     const material = await Material.findOne({
-      where: {
-        material_id: id,
-        is_active: true
-      }
+      where: req.withOrg
+        ? req.withOrg({ material_id: id, is_active: true })
+        : { material_id: id, is_active: true }
     });
 
     if (!material) {
@@ -149,7 +144,7 @@ export const createMaterial = async (req, res) => {
       uom: uom || 'PIECE(S)',
       properties: properties || null,
       description: description || null,
-      org_id: orgId || null,
+      org_id: req.orgId || orgId || null,
       is_active: true
     });
 
@@ -183,10 +178,9 @@ export const updateMaterial = async (req, res) => {
     const { materialName, productCode, materialType, uom, properties, description } = req.body;
 
     const material = await Material.findOne({
-      where: {
-        material_id: id,
-        is_active: true
-      }
+      where: req.withOrg
+        ? req.withOrg({ material_id: id, is_active: true })
+        : { material_id: id, is_active: true }
     });
 
     if (!material) {
@@ -199,11 +193,13 @@ export const updateMaterial = async (req, res) => {
     // Check if product code is being changed and if new code already exists
     if (productCode && productCode !== material.product_code) {
       const existingMaterial = await Material.findOne({
-        where: {
-          product_code: productCode,
-          org_id: material.org_id,
-          material_id: { [Op.ne]: id }
-        }
+        where: req.withOrg
+          ? req.withOrg({ product_code: productCode, material_id: { [Op.ne]: id } })
+          : {
+              product_code: productCode,
+              org_id: material.org_id,
+              material_id: { [Op.ne]: id }
+            }
       });
 
       if (existingMaterial) {
@@ -247,10 +243,9 @@ export const deleteMaterial = async (req, res) => {
     const { id } = req.params;
 
     const material = await Material.findOne({
-      where: {
-        material_id: id,
-        is_active: true
-      }
+      where: req.withOrg
+        ? req.withOrg({ material_id: id, is_active: true })
+        : { material_id: id, is_active: true }
     });
 
     if (!material) {
